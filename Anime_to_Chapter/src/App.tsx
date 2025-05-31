@@ -1,7 +1,7 @@
 // import { useState } from 'react'
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import Home from './Components/Home'
-import EpCard from './Components/EpisodesCard';
+import EpCard from './Components/EpisodeInformation';
 import './App.css'
 
 function App() {
