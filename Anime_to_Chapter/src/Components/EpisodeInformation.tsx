@@ -75,6 +75,23 @@ interface WikiSearchResponse {
     error?: string;
 }
 
+interface EpisodeSearchResponse {
+    success: boolean;
+    url?: string;
+    episode_number?: string;
+    episode_title?: string;
+    error?: string;
+    tried_urls?: string[];
+}
+
+interface EpisodeContentResponse {
+    success: boolean;
+    url?: string;
+    chapters?: string[];
+    html?: string;
+    error?: string;
+}
+
 const EpisodesInformation = () => {
     const { id } = useParams<{ id: string }>();
     const [anime, setAnime] = useState<AnimeDetail | null>(null);
@@ -83,6 +100,8 @@ const EpisodesInformation = () => {
     const [error, setError] = useState<string | null>(null);
     const [showAiredStates, setShowAiredStates] = useState<{ [key: number]: boolean }>({});
     const [chapters, setChapters] = useState<{ [episodeId: number]: string[] }>({});
+    // Store the successful URL for each episode
+    const [successfulUrls, setSuccessfulUrls] = useState<{ [episodeId: number]: string }>({});
     const [foundFandomUrl, setFoundFandomUrl] = useState<string>("");
     const [wikiSubdomain, setWikiSubdomain] = useState<string>("");
 
@@ -92,7 +111,6 @@ const EpisodesInformation = () => {
             setError(null);
 
             try {
-                // Fetch anime details
                 const animeResponse = await fetch(`https://api.jikan.moe/v4/anime/${id}`);
                 if (!animeResponse.ok) {
                     throw new Error('Failed to fetch anime details');
@@ -100,10 +118,8 @@ const EpisodesInformation = () => {
                 const animeData: JikanAnimeResponse = await animeResponse.json();
                 setAnime(animeData.data);
 
-                // Wait for 1 second to avoid rate limiting
                 await new Promise(resolve => setTimeout(resolve, 1000));
 
-                // Fetch episodes
                 const episodesResponse = await fetch(`https://api.jikan.moe/v4/anime/${id}/episodes`);
                 if (!episodesResponse.ok) {
                     throw new Error('Failed to fetch episodes');
@@ -122,13 +138,38 @@ const EpisodesInformation = () => {
         }
     }, [id]);
 
-    // Fix for the useEffect that calls the wiki search API
-useEffect(() => {
-    const findFandomWiki = async () => {
-        if (anime) {
-            const animeName = getTitle(anime);
-            console.log("Searching for anime:", animeName);
-            
+    useEffect(() => {
+        const getAllAnimeTitles = (anime: AnimeDetail | null): string[] => {
+            if (!anime) return [];
+
+            const titles: string[] = [];
+
+            if (anime.title_english) titles.push(anime.title_english);
+
+            const englishTitle = anime.titles.find(t => t.type === 'English')?.title;
+            if (englishTitle && !titles.includes(englishTitle)) titles.push(englishTitle);
+
+            const defaultTitle = anime.titles.find(t => t.type === 'Default')?.title;
+            if (defaultTitle && !titles.includes(defaultTitle)) titles.push(defaultTitle);
+
+            if (anime.title_japanese && !titles.includes(anime.title_japanese)) titles.push(anime.title_japanese);
+
+            anime.titles
+                .filter(t => t.type === 'Synonym')
+                .forEach(t => {
+                    if (t.title && !titles.includes(t.title)) titles.push(t.title);
+                });
+
+            anime.titles
+                .filter(t => !['English', 'Default', 'Synonym', 'Japanese'].includes(t.type))
+                .forEach(t => {
+                    if (t.title && !titles.includes(t.title)) titles.push(t.title);
+                });
+
+            return titles.filter(title => title && title.trim().length > 0);
+        };
+
+        const searchWikiWithTitle = async (animeName: string): Promise<WikiSearchResponse> => {
             try {
                 const response = await fetch('http://localhost:5000/search-anime-wiki', {
                     method: 'POST',
@@ -136,49 +177,69 @@ useEffect(() => {
                         'Content-Type': 'application/json',
                         'Accept': 'application/json'
                     },
-                    body: JSON.stringify({ 
-                        anime_name: animeName,  // This matches what your Flask API expects
-                        animeTitle: animeName   // Adding both for compatibility
-                    }),
+                    body: JSON.stringify({ anime_name: animeName }),
                 });
 
-                console.log("Response status:", response.status);
-                
                 if (!response.ok) {
                     const errorText = await response.text();
-                    console.error("API Error:", errorText);
                     throw new Error(`HTTP ${response.status}: ${errorText}`);
                 }
 
-                const data: WikiSearchResponse = await response.json();
-                console.log("Wiki search result:", data);
-
-                if (data.success && data.url) {
-                    setFoundFandomUrl(data.url);
-                    // Extract subdomain from URL for episode linking
-                    const subdomain = extractSubdomain(data.url);
-                    setWikiSubdomain(subdomain);
-                    console.log("Found fandom URL:", data.url);
-                    console.log("Extracted subdomain:", subdomain);
-                } else {
-                    console.log("No fandom wiki found:", data.error);
-                    setWikiSubdomain("unknown");
-                }
-
+                return await response.json();
             } catch (err) {
-                console.error('Error searching for fandom wiki:', err);
-                setWikiSubdomain("unknown");
-                
-                // Optional: Show user-friendly error message
-                if (err instanceof Error) {
-                    console.error('Detailed error:', err.message);
-                }
+                console.error(`Error searching with title "${animeName}":`, err);
+                return { success: false, error: err instanceof Error ? err.message : 'Unknown error' };
             }
-        }
-    };
+        };
 
-    findFandomWiki();
-}, [anime]);
+        const findFandomWiki = async () => {
+            if (anime) {
+                const allTitles = getAllAnimeTitles(anime);
+                
+                for (let i = 0; i < allTitles.length; i++) {
+                    const currentTitle = allTitles[i];
+
+                    try {
+                        const data = await searchWikiWithTitle(currentTitle);
+
+                        // Only stop searching if we get a successful response AND a valid URL
+                        if (data.success && data.url && data.url.trim() !== '') {
+                            setFoundFandomUrl(data.url);
+                            const subdomain = extractSubdomain(data.url);
+                            setWikiSubdomain(subdomain);
+                            return; // Found valid URL, stop searching
+                        }
+
+                        // Add delay between requests (except for the last one)
+                        if (i < allTitles.length - 1) {
+                            await new Promise(resolve => setTimeout(resolve, 500));
+                        }
+
+                    } catch (err) {
+                        console.error(`Error searching with title "${currentTitle}":`, err);
+                        // Continue to next title on error
+                        continue;
+                    }
+                }
+
+                // If we've gone through all titles without finding a valid URL
+                console.log('No valid Fandom wiki found for any of the titles');
+                setWikiSubdomain("unknown");
+            }
+        };
+
+        findFandomWiki();
+    }, [anime]);
+
+    const getTitle = (anime: AnimeDetail | null): string => {
+        if (!anime) return 'Anime image';
+        return (
+            anime.title_english ||
+            anime.titles.find(t => t.type === 'English')?.title ||
+            anime.titles[0]?.title || // fallback to first title if available
+            'Anime image'
+        );
+    };
 
     const extractSubdomain = (url: string): string => {
         try {
@@ -194,16 +255,12 @@ useEffect(() => {
         return "unknown";
     };
 
-    const toggleInfo = (episodeId: number, episodeTitle: string) => {
+    const toggleInfo = (episodeId: number, episodeTitle: string, episodeNumber: string) => {
         const shouldShow = !showAiredStates[episodeId];
-
-        setShowAiredStates((prevState) => ({
-            ...prevState,
-            [episodeId]: shouldShow,
-        }));
+        setShowAiredStates((prev) => ({ ...prev, [episodeId]: shouldShow }));
 
         if (shouldShow && wikiSubdomain !== "unknown") {
-            handleEpisodeClick(episodeId, wikiSubdomain, episodeTitle);
+            handleEpisodeClick(episodeId, wikiSubdomain, episodeTitle, episodeNumber);
         }
     };
 
@@ -213,279 +270,257 @@ useEffect(() => {
         return date.toLocaleDateString();
     };
 
-    const getTitle = (anime: AnimeDetail | null) => {
-        if (!anime) return 'Unknown Anime';
-        return anime.title_english || anime.titles.find(t => t.type === 'English')?.title || anime.title_japanese || 'Unknown Anime';
-    };
+    // Updated to use the new backend endpoint for finding episode pages
+    const findEpisodePage = async (subdomain: string, episodeTitle: string, episodeNumber: string): Promise<string | null> => {
+        try {
+            console.log(`Searching for episode page: ${episodeNumber} - "${episodeTitle}" in ${subdomain}.fandom.com`);
+            
+            const response = await fetch('http://localhost:5000/search-episode-page', {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                },
+                body: JSON.stringify({ 
+                    subdomain: subdomain,
+                    episode_title: episodeTitle,
+                    episode_number: episodeNumber
+                }),
+            });
 
-    const formatLink = (subdomain: string, epTitle: string): string => {
-        if (!subdomain || !epTitle || subdomain === "unknown") {
-            return '';
+            if (!response.ok) {
+                console.error(`Episode search failed with status: ${response.status}`);
+                return null;
+            }
+
+            const data: EpisodeSearchResponse = await response.json();
+            
+            if (data.success && data.url) {
+                console.log(`Found episode page: ${data.url}`);
+                return data.url;
+            } else {
+                console.log(`No episode page found: ${data.error}`);
+                return null;
+            }
+        } catch (err) {
+            console.error(`Error searching for episode page:`, err);
+            return null;
         }
-
-        const epfTitle = encodeURIComponent(epTitle.trim().replace(/\s+/g, "_"));
-        return `https://${subdomain}.fandom.com/wiki/${epfTitle}`;
     };
 
-    const chapterinfo = async (url: string): Promise<string[]> => {
+    // Updated to use the new backend endpoint for getting episode content
+    const getEpisodeContent = async (url: string): Promise<string[]> => {
         if (!url) return [];
-        
-        console.log("Trying URL for chapters:", url);
 
         try {
-            const res = await fetch('http://localhost:5000/getchapters', {
+            console.log(`Fetching episode content from: ${url}`);
+            
+            const response = await fetch('http://localhost:5000/get-episode-content', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                },
                 body: JSON.stringify({ url }),
             });
 
-            const data = await res.json();
-            if (Array.isArray(data.chapters)) {
+            if (!response.ok) {
+                console.error(`Episode content fetch failed with status: ${response.status}`);
+                return [];
+            }
+
+            const data: EpisodeContentResponse = await response.json();
+            
+            if (data.success && data.chapters) {
+                console.log(`Found chapters:`, data.chapters);
                 return data.chapters;
+            } else {
+                console.log(`No chapters found: ${data.error}`);
+                return [];
             }
         } catch (err) {
-            console.error("Error fetching chapters:", err);
+            console.error(`Error fetching episode content:`, err);
+            // Check if it's a network error
+            if (err instanceof TypeError && err.message === 'Failed to fetch') {
+                console.error('This might be a CORS issue or the backend server (localhost:5000) might not be running');
+            }
+            return [];
         }
-
-        return [];
     };
 
-    const handleEpisodeClick = async (episodeId: number, subdomain: string, episodeTitle: string) => {
-        try {
-            const baseUrl = formatLink(subdomain, episodeTitle);
-            const urls: string[] = [
-                baseUrl, 
-                baseUrl + '_(Episode)',
-                baseUrl.replace(episodeTitle.replace(/\s+/g, "_"), episodeTitle.replace(/\s+/g, "_") + "_(episode)")
-            ];
+    const handleEpisodeClick = async (
+        episodeId: number,
+        subdomain: string,
+        episodeTitle: string,
+        episodeNumber: string
+    ) => {
+        // Check if we already have a successful URL for this episode
+        if (successfulUrls[episodeId]) {
+            const cachedUrl = successfulUrls[episodeId];
+            const chaptersData = await getEpisodeContent(cachedUrl);
+            setChapters((prev) => ({ ...prev, [episodeId]: chaptersData }));
+            return;
+        }
 
-            for (const url of urls) {
-                if (url) {
-                    const chapterData = await chapterinfo(url);
-                    if (chapterData.length !== 0) {
-                        setChapters((prev) => ({
-                            ...prev,
-                            [episodeId]: chapterData,
-                        }));
-                        return;
-                    }
-                }
-            }
-
-            setChapters((prev) => ({
-                ...prev,
-                [episodeId]: ["No chapter information found"],
-            }));
-        } catch (err) {
-            console.error("Failed to fetch episode details:", err);
-            setChapters((prev) => ({
-                ...prev,
-                [episodeId]: ["Error fetching chapter information"],
-            }));
+        // Use the new backend endpoint to find the episode page
+        const episodeUrl = await findEpisodePage(subdomain, episodeTitle, episodeNumber);
+        
+        if (episodeUrl) {
+            // Cache the successful URL
+            setSuccessfulUrls((prev) => ({ ...prev, [episodeId]: episodeUrl }));
+            
+            // Get the episode content
+            const chaptersData = await getEpisodeContent(episodeUrl);
+            setChapters((prev) => ({ ...prev, [episodeId]: chaptersData }));
+        } else {
+            // No episode page found
+            setSuccessfulUrls((prev) => ({ ...prev, [episodeId]: '' }));
+            setChapters((prev) => ({ ...prev, [episodeId]: [] }));
         }
     };
 
     if (isLoading) {
-        return <div className="text-center p-8">Loading...</div>;
+        return <div className="flex justify-center items-center min-h-screen">Loading...</div>;
     }
 
     if (error) {
-        return (
-            <div className="p-4 bg-red-100 text-red-700 rounded">
-                <p>Error: {error}</p>
-                <Link to="/" className="text-blue-600 hover:underline mt-2 inline-block">
-                    Back to Search
-                </Link>
-            </div>
-        );
+        return <div className="flex justify-center items-center min-h-screen text-red-500">Error: {error}</div>;
     }
 
     if (!anime) {
-        return (
-            <div className="text-center p-8">
-                <p className="mb-4">Anime not found</p>
-                <Link to="/" className="text-blue-600 hover:underline">
-                    Back to Search
-                </Link>
-            </div>
-        );
+        return <div className="flex justify-center items-center min-h-screen">No anime data found</div>;
     }
 
     return (
-        <div className="max-w-4xl mx-auto">
-            <Link to="/" className="text-blue-600 hover:underline mb-4 inline-block">
-                &larr; Back to Search
-            </Link>
-
-            <div className="bg-white rounded-lg shadow overflow-hidden">
-                <div className="p-6 md:flex pt-4">
-                    <h1 className="text-2xl md:text-3xl font-bold">{getTitle(anime)}</h1>
-
-                    {foundFandomUrl ? (
-                        <div className="mt-2">
-                            <a 
-                                href={foundFandomUrl} 
-                                target="_blank" 
-                                rel="noopener noreferrer"
-                                className="text-sm text-green-600 hover:underline font-semibold"
-                            >
-                                ✓ Found Fandom Wiki: {foundFandomUrl}
-                            </a>
-                        </div>
-                    ) : (
-                        <div className="mt-2">
-                            <span className="text-sm text-orange-600">
-                                🔍 Searching for fandom wiki...
-                            </span>
-                        </div>
-                    )}
-
-                    {anime.genres && anime.genres.length > 0 && (
-                        <div className="flex flex-wrap gap-2 my-3">
-                            {anime.genres.map((genre) => (
-                                <span key={genre.mal_id} className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs">
-                                    {genre.name}
-                                </span>
-                            ))}
-                        </div>
-                    )}
-
-                    <div className="d-flex justify-content-center align-items-center">
-                        <div className="md:w-1/3 flex-shrink-0 mb-4 md:mb-0 px-5">
-                            <img
-                                src={anime.images.jpg.large_image_url}
-                                alt={getTitle(anime)}
-                                className="w-40 max-w-xs mx-auto rounded shadow"
-                                style={{
-                                    width: '15vw',
-                                    height: 'auto',
-                                    objectFit: 'contain',
-                                    minWidth: '50px',
-                                    minHeight: '75px',
-                                }}
-                                onError={(e) => {
-                                    const target = e.target as HTMLImageElement;
-                                    target.src = "/api/placeholder/225/350";
-                                }}
-                            />
-                        </div>
-                        <div className="md:ml-6 md:w-2/3">
-                            <div className="grid md:grid-cols-2 gap-4 my-4 px-5">
-                                <div>
-                                    <p><span className="font-semibold">Status:</span> {anime.status || 'Unknown'}</p>
-                                    <p><span className="font-semibold">Episodes:</span> {anime.episodes || 'Unknown'}</p>
-                                    <p><span className="font-semibold">Rating:</span> {anime.rating || 'Unknown'}</p>
-                                </div>
-                                <div>
-                                    <p><span className="font-semibold">Season:</span> {anime.season && anime.year ? `${anime.season.charAt(0).toUpperCase() + anime.season.slice(1)} ${anime.year}` : 'Unknown'}</p>
-                                    <p><span className="font-semibold">Score:</span> {anime.score ? `${anime.score} (${anime.scored_by?.toLocaleString()} votes)` : 'N/A'}</p>
-                                    <p><span className="font-semibold">Rank:</span> {anime.rank ? `#${anime.rank}` : 'N/A'}</p>
-                                </div>
+        <div className="container mx-auto px-4 py-8">
+            <div className="mb-8">
+                <Link to="/" className="text-blue-500 hover:text-blue-700 mb-4 inline-block">
+                    ← Back to Search
+                </Link>
+                
+                <div className="flex flex-col md:flex-row gap-8">
+                    <div className="md:w-1/3">
+                        <img 
+                            src={anime.images.jpg.large_image_url} 
+                            alt={getTitle(anime)}
+                            className="w-full rounded-lg shadow-lg"
+                        />
+                    </div>
+                    
+                    <div className="md:w-2/3">
+                        <h1 className="text-3xl font-bold mb-4">{getTitle(anime)}</h1>
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                            <div>
+                                <strong>Status:</strong> {anime.status}
                             </div>
-
-                            <div className="mt-4">
-                                <p><span className="font-semibold">Aired:</span> {formatDate(anime.aired.from)} to {anime.aired.to ? formatDate(anime.aired.to) : 'Present'}</p>
+                            <div>
+                                <strong>Episodes:</strong> {anime.episodes || 'Unknown'}
+                            </div>
+                            <div>
+                                <strong>Score:</strong> {anime.score || 'N/A'}
+                            </div>
+                            <div>
+                                <strong>Year:</strong> {anime.year || 'Unknown'}
                             </div>
                         </div>
+                        
+                        {anime.synopsis && (
+                            <div className="mb-6">
+                                <h2 className="text-xl font-semibold mb-2">Synopsis</h2>
+                                <p className="text-gray-700">{anime.synopsis}</p>
+                            </div>
+                        )}
                     </div>
                 </div>
+            </div>
 
-                {anime.synopsis && (
-                    <div className="mt-4 px-5">
-                        <h3 className="text-lg font-semibold mb-2">Summary</h3>
-                        <p className="text-gray-700">{anime.synopsis}</p>
+            <div className="mb-4">
+                <h2 className="text-2xl font-bold mb-4">Episodes</h2>
+                {foundFandomUrl && (
+                    <div className="mb-4 p-4 bg-green-100 rounded-lg">
+                        <p className="text-green-800">
+                            <strong>Found Fandom Wiki:</strong> 
+                            <a href={foundFandomUrl} target="_blank" rel="noopener noreferrer" className="ml-2 text-blue-600 hover:text-blue-800">
+                                {foundFandomUrl}
+                            </a>
+                        </p>
                     </div>
                 )}
-
-                {/* Episodes List */}
-                <div className="p-6 border-t">
-                    <h2 className="text-xl font-bold mb-4">Episodes</h2>
-
-                    {episodes.length > 0 ? (
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                            {episodes.map((episode, index) => (
-                                <div key={episode.mal_id} className="border rounded overflow-hidden shadow-sm hover:shadow transition-shadow">
-                                    <div className="p-4 d-flex align-items-center justify-content-between">
-                                        <div className="d-flex align-items-center" style={{ gap: '10px', minWidth: '50%' }}>
-                                            <div className="d-flex align-items-center" style={{ gap: '10px' }}>
-                                                <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs text-center" style={{ width: '30px' }}>
-                                                    {index + 1}
-                                                </span>
-                                                <div style={{ width: '1px', height: '24px', backgroundColor: 'black' }}></div>
-                                            </div>
-                                            <h3 className="font-medium text-lg m-0 text-truncate">{episode.title}</h3>
-                                        </div>
-
-                                        <div className="d-flex align-items-center" style={{ gap: '10px', minWidth: '180px', justifyContent: 'flex-end' }}>
-                                            {episode.aired && (
-                                                <p className="text-sm text-gray-600 mb-0 px-3">
-                                                    Released: {formatDate(episode.aired)}
-                                                </p>
-                                            )}
-                                            <button
-                                                className="btn btn-primary btn-sm"
-                                                onClick={() => toggleInfo(episode.mal_id, episode.title)}
-                                                disabled={!foundFandomUrl}
-                                            >
-                                                {showAiredStates[episode.mal_id] ? '▲' : '▼'}
-                                            </button>
-                                        </div>
-                                    </div>
-
-                                    {/* Episode details */}
-                                    {showAiredStates[episode.mal_id] && (
-                                        <div className="p-4 bg-gray-50 border-t">
-                                            <p><strong>Aired on:</strong> {episode.aired ? formatDate(episode.aired) : 'Unknown Air Date'}</p>
-                                            {episode.filler && <p><span className="badge bg-warning text-dark">Filler Episode</span></p>}
-                                            {episode.recap && <p><span className="badge bg-info text-dark">Recap Episode</span></p>}
-                                            
-                                            {wikiSubdomain !== "unknown" && (
-                                                <div>
-                                                    <a
-                                                        href={formatLink(wikiSubdomain, episode.title)}
-                                                        target="_blank"
-                                                        rel="noopener noreferrer"
-                                                        className="text-blue-600 hover:underline"
-                                                    >
-                                                        Fandom Wiki Link: {formatLink(wikiSubdomain, episode.title)}
-                                                    </a>
-
-                                                    {chapters[episode.mal_id] && (
-                                                        <div className="mt-2">
-                                                            <p className="mb-0 fw-semibold text-dark fs-5">
-                                                                Chapters:{" "}
-                                                                <span className="text-muted">
-                                                                    {chapters[episode.mal_id].join(", ")}
-                                                                </span>
-                                                            </p>
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            )}
-
-                                            {wikiSubdomain === "unknown" && (
-                                                <div className="text-orange-600 text-sm">
-                                                    No fandom wiki found for this anime
-                                                </div>
-                                            )}
-                                        </div>
+                
+                <div className="space-y-4">
+                    {episodes.map((episode) => (
+                        <div key={episode.mal_id} className="border rounded-lg p-4 hover:shadow-md transition-shadow">
+                            <div className="flex justify-between items-start">
+                                <div className="flex-1">
+                                    <h3 className="text-lg font-semibold mb-2">
+                                        Episode {episode.episode}: {episode.title}
+                                    </h3>
+                                    <p className="text-gray-600 mb-2">
+                                        Aired: {formatDate(episode.aired)}
+                                    </p>
+                                    {episode.filler && (
+                                        <span className="inline-block bg-yellow-200 text-yellow-800 px-2 py-1 rounded text-sm mr-2">
+                                            Filler
+                                        </span>
+                                    )}
+                                    {episode.recap && (
+                                        <span className="inline-block bg-blue-200 text-blue-800 px-2 py-1 rounded text-sm">
+                                            Recap
+                                        </span>
                                     )}
                                 </div>
-                            ))}
+                                
+                                <button
+                                    onClick={() => toggleInfo(episode.mal_id, episode.title, episode.episode)}
+                                    className="ml-4 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
+                                    disabled={wikiSubdomain === "unknown"}
+                                >
+                                    {showAiredStates[episode.mal_id] ? 'Hide Info' : 'Show Info'}
+                                </button>
+                            </div>
+                            
+                            {showAiredStates[episode.mal_id] && (
+                                <div className="mt-4 p-4 bg-gray-50 rounded">
+                                    {chapters[episode.mal_id] && chapters[episode.mal_id].length > 0 ? (
+                                        <div>
+                                            <h4 className="font-semibold mb-2">Chapters covered:</h4>
+                                            <div className="flex flex-wrap gap-2">
+                                                {chapters[episode.mal_id].map((chapter, index) => (
+                                                    <span key={index} className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-sm">
+                                                        Chapter {chapter}
+                                                    </span>
+                                                ))}
+                                            </div>
+                                            {successfulUrls[episode.mal_id] && (
+                                                <div className="mt-2">
+                                                    <a 
+                                                        href={successfulUrls[episode.mal_id]} 
+                                                        target="_blank" 
+                                                        rel="noopener noreferrer"
+                                                        className="text-blue-600 hover:text-blue-800 text-sm"
+                                                    >
+                                                        View on Fandom Wiki →
+                                                    </a>
+                                                </div>
+                                            )}
+                                        </div>
+                                    ) : (
+                                        <p className="text-gray-600">
+                                            {wikiSubdomain === "unknown" 
+                                                ? "No Fandom wiki found for this anime" 
+                                                : "Loading chapter information..."
+                                            }
+                                        </p>
+                                    )}
+                                </div>
+                            )}
                         </div>
-                    ) : anime.episodes ? (
-                        <div className="bg-gray-50 p-4 rounded">
-                            <p>This anime has {anime.episodes} episode{anime.episodes !== 1 ? 's' : ''}, but detailed episode information is not available.</p>
-                        </div>
-                    ) : (
-                        <div className="bg-gray-50 p-4 rounded">
-                            <p>No episode information available for this anime.</p>
-                        </div>
-                    )}
+                    ))}
                 </div>
             </div>
         </div>
     );
-}
+};
 
 export default EpisodesInformation;
