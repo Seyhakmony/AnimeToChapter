@@ -6,6 +6,10 @@ import re
 from urllib.parse import quote_plus, urlparse, unquote
 import time
 
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.chrome.options import Options
+
 app = Flask(__name__)
 CORS(app)
 
@@ -47,12 +51,9 @@ def search_anime_wiki():
         print(f"[MAIN] 💥 Error: {str(e)}")
         return jsonify({"success": False, "error": str(e)}), 500
 
-
 @app.route('/search-episode-page', methods=['POST'])
 def search_episode_page():
-    """
-    Enhanced endpoint to search for specific episode pages using both direct URL generation and web search
-    """
+    print("starting click")
     try:
         data = request.get_json()
         
@@ -72,8 +73,24 @@ def search_episode_page():
         print(f"[EPISODE_SEARCH] 🎯 Searching for episode in {subdomain}.fandom.com")
         print(f"[EPISODE_SEARCH] Episode: {episode_number} - '{episode_title}'")
         
-        # Method 1: Try web search first (more reliable)
-        print("[EPISODE_SEARCH] 🔍 Trying web search method...")
+
+        print("[EPISODE_SEARCH] 🔧 Trying direct URL generation...")
+        possible_urls = generate_episode_urls(subdomain, episode_title, episode_number)
+        
+        for url in possible_urls:
+            print(f"[EPISODE_SEARCH] 🔗 Testing direct URL: {url}")
+            if test_episode_url(url, episode_title, episode_number):
+                print(f"[EPISODE_SEARCH] ✅ Found via DIRECT: {url}")
+                return jsonify({
+                    "success": True, 
+                    "url": url,
+                    "episode_number": episode_number,
+                    "episode_title": episode_title,
+                    "method": "direct"
+                })
+            time.sleep(0.2)
+
+        print("[Episode WEB] 🔍 Trying web search method...")
         search_urls = web_search_episode_page(subdomain, episode_title, episode_number)
         
         for url in search_urls:
@@ -88,37 +105,18 @@ def search_episode_page():
                     "method": "web_search"
                 })
         
-        # Method 2: Fallback to direct URL generation
-        print("[EPISODE_SEARCH] 🔧 Trying direct URL generation...")
-        possible_urls = generate_episode_urls(subdomain, episode_title, episode_number)
-        
-        for url in possible_urls:
-            print(f"[EPISODE_SEARCH] 🔗 Testing direct URL: {url}")
-            
-            if test_episode_url(url, episode_title, episode_number):
-                print(f"[EPISODE_SEARCH] ✅ Found via DIRECT: {url}")
-                return jsonify({
-                    "success": True, 
-                    "url": url,
-                    "episode_number": episode_number,
-                    "episode_title": episode_title,
-                    "method": "direct"
-                })
-            
-            # Small delay between requests to be respectful
-            time.sleep(0.2)
-        
         print(f"[EPISODE_SEARCH] ❌ No working episode page found")
         return jsonify({
             "success": False, 
             "error": "No valid episode page found",
-            "tried_search_urls": search_urls[:3],
-            "tried_direct_urls": possible_urls[:5]
+            "tried_direct_urls": possible_urls[:5],
+            "tried_search_urls": search_urls[:3]
         }), 404
         
     except Exception as e:
         print(f"[EPISODE_SEARCH] 💥 Error: {str(e)}")
         return jsonify({"success": False, "error": str(e)}), 500
+
 
 
 def generate_episode_urls(subdomain, episode_title, episode_number):
@@ -167,15 +165,14 @@ def generate_episode_urls(subdomain, episode_title, episode_number):
     print(f"[GENERATE_URLS] 📋 Generated {len(unique_urls)} potential URLs")
     return unique_urls
 
-
 def web_search_episode_page(subdomain, episode_title, episode_number):
     """
-    DuckDuckGo search to find episode pages
+    DuckDuckGo search to find episode pages using Selenium
     """
     search_urls = []
     try:
+        # Build query
         query_parts = []
-
         if episode_title:
             query_parts.append(episode_title.strip())
 
@@ -183,35 +180,44 @@ def web_search_episode_page(subdomain, episode_title, episode_number):
             query_parts.append(f'episode {episode_number}')
         else:
             query_parts.append("episode")
-        query_parts.append(f"site:{subdomain}.fandom.com")
 
+        query_parts.append(f"site:{subdomain}.fandom.com")
         search_query = " ".join(query_parts)
         print(f"[EPISODE_SEARCH] 🔍 Query: {search_query}")
 
+        # Encode query
         encoded_query = quote_plus(search_query)
-        search_url = f"https://html.duckduckgo.com/html/?q={encoded_query}"
-        print("searchasd "+ search_url)
-        response = requests.get(search_url, headers={'User-Agent': 'Mozilla/5.0'}, timeout=10)
-        response.raise_for_status()
+        search_url = f"https://duckduckgo.com/?q={encoded_query}"  # ✅ Use main DuckDuckGo, not HTML version
+        print("🔗 Search URL:", search_url)
         
-        soup = BeautifulSoup(response.text, 'html.parser')
-        print("A")
-        print(soup)
-        for link in soup.find_all('a', href=True):
-            print("b")
-            href = link['href']
-            print("b:", href) 
-            if 'uddg=' in href:
-                print("c")
-                try:
-                    actual_url = unquote(href.split('uddg=')[1].split('&')[0])
-                    print(f"[WEB_SEARCH] 🌐 Candidate URL: {actual_url}")
-                    if f'{subdomain}.fandom.com' in actual_url and '/wiki/' in actual_url:
-                        search_urls.append(actual_url)
-                except Exception as e:
-                    print(f"[WEB_SEARCH] ⚠️ Error decoding link: {e}")
-                search_urls = list(dict.fromkeys(search_urls))
+        # Set up Selenium headless Chrome
+        options = Options()
+        options.add_argument("--headless")
+        options.add_argument("--no-sandbox")
+        options.add_argument("--disable-dev-shm-usage")
+        driver = webdriver.Chrome(options=options)
 
+        driver.get(search_url)
+        time.sleep(3)  # allow JavaScript to load results
+
+        print("HTML:")
+        print(driver.page_source)
+        # Scrape links
+        links = driver.find_elements(By.TAG_NAME, "a")
+        print(links)
+        for link in links:
+            href = link.get_attribute("href")
+            if href:
+                print(f"[WEB_SEARCH] 🌐 Candidate URL: {href}")
+                if f'{subdomain}.fandom.com' in href and '/wiki/' in href:
+                    search_urls.append(href)
+
+        driver.quit()
+
+        # Remove duplicates
+        search_urls = list(dict.fromkeys(search_urls))
+
+        # Prefer /wiki/Episode_{number}
         if episode_number:
             preferred = f"/wiki/Episode_{int(episode_number)}"
             search_urls.sort(key=lambda url: (preferred not in url, len(url)))
@@ -489,9 +495,10 @@ def web_search_fandom_ddg(anime_name):
 
         soup = BeautifulSoup(response.text, 'html.parser')
         links = soup.find_all('a', href=True)
-
+      
         found_urls = []
         for link in links:
+           
             href = link['href']
             if 'uddg=' in href:
                 try:
