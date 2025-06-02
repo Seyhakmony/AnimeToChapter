@@ -1,1 +1,1 @@
-find_fandom_wiki_direct
+ku
