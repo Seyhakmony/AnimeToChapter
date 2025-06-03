@@ -82,6 +82,12 @@ interface EpisodeSearchResponse {
     episode_title?: string;
     error?: string;
     tried_urls?: string[];
+    fallback_message?: string;
+    anime_series_links?: Array<{
+        title: string;
+        url: string;
+    }>;
+    method?: string;
 }
 
 interface EpisodeContentResponse {
@@ -104,6 +110,8 @@ const EpisodesInformation = () => {
     const [successfulUrls, setSuccessfulUrls] = useState<{ [episodeId: number]: string }>({});
     const [foundFandomUrl, setFoundFandomUrl] = useState<string>("");
     const [wikiSubdomain, setWikiSubdomain] = useState<string>("");
+
+    const [fallbackData, setFallbackData] = useState<{ [episodeId: number]: { message: string, links: Array<{ title: string, url: string }> } }>({});
 
     useEffect(() => {
         const fetchData = async () => {
@@ -173,7 +181,7 @@ const EpisodesInformation = () => {
             try {
                 const response = await fetch('http://localhost:5000/search-anime-wiki', {
                     method: 'POST',
-                    headers: { 
+                    headers: {
                         'Content-Type': 'application/json',
                         'Accept': 'application/json'
                     },
@@ -195,7 +203,7 @@ const EpisodesInformation = () => {
         const findFandomWiki = async () => {
             if (anime) {
                 const allTitles = getAllAnimeTitles(anime);
-                
+
                 for (let i = 0; i < allTitles.length; i++) {
                     const currentTitle = allTitles[i];
 
@@ -271,42 +279,49 @@ const EpisodesInformation = () => {
     };
 
     // Updated to use the new backend endpoint for finding episode pages
-    const findEpisodePage = async (subdomain: string, episodeTitle: string, episodeNumber: string): Promise<string | null> => {
+    const findEpisodePage = async (subdomain: string, episodeTitle: string, episodeNumber: string): Promise<{ url: string | null, fallbackData?: { message: string, links: Array<{ title: string, url: string }> } }> => {
         try {
             console.log(`Searching for episode page: ${episodeNumber} - "${episodeTitle}" in ${subdomain}.fandom.com`);
-            
+
             const response = await fetch('http://localhost:5000/search-episode-page', {
                 method: 'POST',
-                headers: { 
+                headers: {
                     'Content-Type': 'application/json',
                     'Accept': 'application/json'
                 },
-                body: JSON.stringify({ 
+                body: JSON.stringify({
                     subdomain: subdomain,
                     episode_title: episodeTitle,
                     episode_number: episodeNumber
                 }),
             });
 
-            if (!response.ok) {
-                console.error(`Episode search failed with status: ${response.status}`);
-                return null;
-            }
-
             const data: EpisodeSearchResponse = await response.json();
-            
-            if (data.success && data.url) {
+
+            if (response.ok && data.success && data.url) {
                 console.log(`Found episode page: ${data.url}`);
-                return data.url;
+                return { url: data.url };
+            } else if (response.status === 404 && data.anime_series_links) {
+                console.log(`No episode found, but got anime series links:`, data.anime_series_links);
+                console.log(`Fallback message: ${data.fallback_message}`);
+
+                return {
+                    url: null,
+                    fallbackData: {
+                        message: data.fallback_message || "Chapter scrape couldn't be done, please look for it below:",
+                        links: data.anime_series_links
+                    }
+                };
             } else {
                 console.log(`No episode page found: ${data.error}`);
-                return null;
+                return { url: null };
             }
         } catch (err) {
             console.error(`Error searching for episode page:`, err);
-            return null;
+            return { url: null };
         }
     };
+
 
     // Updated to use the new backend endpoint for getting episode content
     const getEpisodeContent = async (url: string): Promise<string[]> => {
@@ -314,10 +329,10 @@ const EpisodesInformation = () => {
 
         try {
             console.log(`Fetching episode content from: ${url}`);
-            
+
             const response = await fetch('http://localhost:5000/get-episode-content', {
                 method: 'POST',
-                headers: { 
+                headers: {
                     'Content-Type': 'application/json',
                     'Accept': 'application/json'
                 },
@@ -330,7 +345,7 @@ const EpisodesInformation = () => {
             }
 
             const data: EpisodeContentResponse = await response.json();
-            
+
             if (data.success && data.chapters) {
                 console.log(`Found chapters:`, data.chapters);
                 return data.chapters;
@@ -363,17 +378,22 @@ const EpisodesInformation = () => {
         }
 
         // Use the new backend endpoint to find the episode page
-        const episodeUrl = await findEpisodePage(subdomain, episodeTitle, episodeNumber);
-        
-        if (episodeUrl) {
+        const result = await findEpisodePage(subdomain, episodeTitle, episodeNumber);
+
+        if (result.url) {
             // Cache the successful URL
-            setSuccessfulUrls((prev) => ({ ...prev, [episodeId]: episodeUrl }));
-            
+            setSuccessfulUrls((prev) => ({ ...prev, [episodeId]: result.url! }));
+
             // Get the episode content
-            const chaptersData = await getEpisodeContent(episodeUrl);
+            const chaptersData = await getEpisodeContent(result.url);
             setChapters((prev) => ({ ...prev, [episodeId]: chaptersData }));
+        } else if (result.fallbackData) {
+            // Store fallback data
+            setFallbackData((prev) => ({ ...prev, [episodeId]: result.fallbackData! }));
+            setSuccessfulUrls((prev) => ({ ...prev, [episodeId]: '' }));
+            setChapters((prev) => ({ ...prev, [episodeId]: [] }));
         } else {
-            // No episode page found
+            // No episode page found and no fallback data
             setSuccessfulUrls((prev) => ({ ...prev, [episodeId]: '' }));
             setChapters((prev) => ({ ...prev, [episodeId]: [] }));
         }
@@ -397,19 +417,19 @@ const EpisodesInformation = () => {
                 <Link to="/" className="text-blue-500 hover:text-blue-700 mb-4 inline-block">
                     ← Back to Search
                 </Link>
-                
+
                 <div className="flex flex-col md:flex-row gap-8">
                     <div className="md:w-1/3">
-                        <img 
-                            src={anime.images.jpg.large_image_url} 
+                        <img
+                            src={anime.images.jpg.large_image_url}
                             alt={getTitle(anime)}
                             className="w-full rounded-lg shadow-lg"
                         />
                     </div>
-                    
+
                     <div className="md:w-2/3">
                         <h1 className="text-3xl font-bold mb-4">{getTitle(anime)}</h1>
-                        
+
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
                             <div>
                                 <strong>Status:</strong> {anime.status}
@@ -424,7 +444,7 @@ const EpisodesInformation = () => {
                                 <strong>Year:</strong> {anime.year || 'Unknown'}
                             </div>
                         </div>
-                        
+
                         {anime.synopsis && (
                             <div className="mb-6">
                                 <h2 className="text-xl font-semibold mb-2">Synopsis</h2>
@@ -440,14 +460,14 @@ const EpisodesInformation = () => {
                 {foundFandomUrl && (
                     <div className="mb-4 p-4 bg-green-100 rounded-lg">
                         <p className="text-green-800">
-                            <strong>Found Fandom Wiki:</strong> 
+                            <strong>Found Fandom Wiki:</strong>
                             <a href={foundFandomUrl} target="_blank" rel="noopener noreferrer" className="ml-2 text-blue-600 hover:text-blue-800">
                                 {foundFandomUrl}
                             </a>
                         </p>
                     </div>
                 )}
-                
+
                 <div className="space-y-4">
                     {episodes.map((episode) => (
                         <div key={episode.mal_id} className="border rounded-lg p-4 hover:shadow-md transition-shadow">
@@ -470,7 +490,7 @@ const EpisodesInformation = () => {
                                         </span>
                                     )}
                                 </div>
-                                
+
                                 <button
                                     onClick={() => toggleInfo(episode.mal_id, episode.title, episode.episode)}
                                     className="ml-4 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
@@ -479,7 +499,7 @@ const EpisodesInformation = () => {
                                     {showAiredStates[episode.mal_id] ? 'Hide Info' : 'Show Info'}
                                 </button>
                             </div>
-                            
+
                             {showAiredStates[episode.mal_id] && (
                                 <div className="mt-4 p-4 bg-gray-50 rounded">
                                     {chapters[episode.mal_id] && chapters[episode.mal_id].length > 0 ? (
@@ -494,9 +514,9 @@ const EpisodesInformation = () => {
                                             </div>
                                             {successfulUrls[episode.mal_id] && (
                                                 <div className="mt-2">
-                                                    <a 
-                                                        href={successfulUrls[episode.mal_id]} 
-                                                        target="_blank" 
+                                                    <a
+                                                        href={successfulUrls[episode.mal_id]}
+                                                        target="_blank"
                                                         rel="noopener noreferrer"
                                                         className="text-blue-600 hover:text-blue-800 text-sm"
                                                     >
@@ -505,11 +525,31 @@ const EpisodesInformation = () => {
                                                 </div>
                                             )}
                                         </div>
+                                    ) : fallbackData[episode.mal_id] ? (
+                                        <div>
+                                            <p className="text-orange-600 mb-3 font-medium">{fallbackData[episode.mal_id].message}</p>
+                                            <div className="space-y-2">
+                                                {fallbackData[episode.mal_id].links.map((link, index) => (
+                                                    <div key={index}>
+                                                        <a
+                                                            href={link.url}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            className="text-blue-600 hover:text-blue-800 underline"
+                                                        >
+                                                            {link.title}
+                                                        </a>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
                                     ) : (
                                         <p className="text-gray-600">
-                                            {wikiSubdomain === "unknown" 
-                                                ? "No Fandom wiki found for this anime" 
-                                                : "Loading chapter information..."
+                                            {wikiSubdomain === "unknown"
+                                                ? "No Fandom wiki found for this anime"
+                                                : successfulUrls[episode.mal_id] === ''
+                                                    ? "No episode information found"
+                                                    : "Loading chapter information..."
                                             }
                                         </p>
                                     )}
