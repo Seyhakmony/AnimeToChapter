@@ -34,30 +34,35 @@ const Home = ({ searchQuery, setSearchQuery, setSearchResults, setIsLoading, set
 
   // Function to search for anime
   const searchAnime = async () => {
-    if (!searchQuery.trim()) return;
+  if (!searchQuery.trim()) return;
+  
+  setIsLoading(true);
+  setError(null);
+  
+  try {
+    const response = await fetch(
+      `https://api.jikan.moe/v4/anime?q=${encodeURIComponent(searchQuery)}&limit=20&order_by=popularity&sort=asc`
+    );
     
-    setIsLoading(true);
-    setError(null);
-    
-    try {
-      const response = await fetch(
-        `https://api.jikan.moe/v4/anime?q=${encodeURIComponent(searchQuery)}&limit=20&order_by=popularity&sort=asc`
-      );
-      
-      if (!response.ok) {
-        throw new Error('Failed to fetch data from Jikan API');
-      }
-      
-      const data: JikanResponse = await response.json();
-      setSearchResults(data.data);
-      navigate('/search');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'An unknown error occurred');
-      setSearchResults([]);
-    } finally {
-      setIsLoading(false);
+    if (!response.ok) {
+      throw new Error('Failed to fetch data from Jikan API');
     }
-  };
+    
+    const data: JikanResponse = await response.json();
+    setSearchResults(data.data);
+    
+    // Store search data in sessionStorage
+    sessionStorage.setItem('searchQuery', searchQuery);
+    sessionStorage.setItem('searchResults', JSON.stringify(data.data));
+    
+    navigate('/search');
+  } catch (err) {
+    setError(err instanceof Error ? err.message : 'An unknown error occurred');
+    setSearchResults([]);
+  } finally {
+    setIsLoading(false);
+  }
+};
 
   // Handle form submission
   const handleSubmit = (e: React.FormEvent) => {

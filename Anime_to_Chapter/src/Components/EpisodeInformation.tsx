@@ -142,68 +142,74 @@ const EpisodesInformation = ({ searchQuery, setSearchQuery, setSearchResults, se
     const [fallbackData, setFallbackData] = useState<{ [episodeId: number]: { message: string, links: Array<{ title: string, url: string }> } }>({});
 
     useEffect(() => {
-        const fetchData = async () => {
-            setIsLoading(true);
-            setError(null);
+    const fetchData = async () => {
+        setIsLoading(true);
+        setError(null);
 
-            try {
-                const animeResponse = await fetch(`https://api.jikan.moe/v4/anime/${id}`);
-                if (!animeResponse.ok) {
-                    throw new Error('Failed to fetch anime details');
-                }
-                const animeData: JikanAnimeResponse = await animeResponse.json();
-                setAnime(animeData.data);
-
-                await new Promise(resolve => setTimeout(resolve, 1000));
-
-                const episodesResponse = await fetch(`https://api.jikan.moe/v4/anime/${id}/episodes`);
-                if (!episodesResponse.ok) {
-                    throw new Error('Failed to fetch episodes');
-                }
-                const episodesData: JikanEpisodesResponse = await episodesResponse.json();
-                setEpisodes(episodesData.data);
-            } catch (err) {
-                setError(err instanceof Error ? err.message : 'An unknown error occurred');
-            } finally {
-                setIsLoading(false);
+        try {
+            const animeResponse = await fetch(`https://api.jikan.moe/v4/anime/${id}`);
+            if (!animeResponse.ok) {
+                throw new Error('Failed to fetch anime details');
             }
-        };
+            const animeData: JikanAnimeResponse = await animeResponse.json();
+            setAnime(animeData.data);
 
-        if (id) {
-            fetchData();
+            await new Promise(resolve => setTimeout(resolve, 1000));
+
+            const episodesResponse = await fetch(`https://api.jikan.moe/v4/anime/${id}/episodes`);
+            if (!episodesResponse.ok) {
+                throw new Error('Failed to fetch episodes');
+            }
+            const episodesData: JikanEpisodesResponse = await episodesResponse.json();
+            setEpisodes(episodesData.data);
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'An unknown error occurred');
+        } finally {
+            setIsLoading(false);
         }
-    }, [id]);
+    };
+
+    if (id) {
+        // Clear the search query when navigating to episode info
+        setSearchQuery('');
+        fetchData();
+    }
+}, [id, setSearchQuery]);
 
     //searching anime
     const navigate = useNavigate();
 
     // Function to search for anime
     const searchAnime = async () => {
-        if (!searchQuery.trim()) return;
+  if (!searchQuery.trim()) return;
 
-        setGlobalIsLoading(true);
-        setGlobalError(null);
+  setGlobalIsLoading(true);
+  setGlobalError(null);
 
-        try {
-            const response = await fetch(
-                `https://api.jikan.moe/v4/anime?q=${encodeURIComponent(searchQuery)}&limit=20&order_by=popularity&sort=asc`
-            );
+  try {
+    const response = await fetch(
+      `https://api.jikan.moe/v4/anime?q=${encodeURIComponent(searchQuery)}&limit=20&order_by=popularity&sort=asc`
+    );
 
-            if (!response.ok) {
-                throw new Error('Failed to fetch data from Jikan API');
-            }
+    if (!response.ok) {
+      throw new Error('Failed to fetch data from Jikan API');
+    }
 
-            const data: JikanResponse = await response.json();
-            setSearchResults(data.data);
-            navigate('/search');
-        } catch (err) {
-            setGlobalError(err instanceof Error ? err.message : 'An unknown error occurred');
-            setSearchResults([]);
-        } finally {
-            setGlobalIsLoading(false);
-        }
-    };
-
+    const data: JikanResponse = await response.json();
+    setSearchResults(data.data);
+    
+    // Add these two lines to store the search data
+    sessionStorage.setItem('searchQuery', searchQuery);
+    sessionStorage.setItem('searchResults', JSON.stringify(data.data));
+    
+    navigate('/search');
+  } catch (err) {
+    setGlobalError(err instanceof Error ? err.message : 'An unknown error occurred');
+    setSearchResults([]);
+  } finally {
+    setGlobalIsLoading(false);
+  }
+};
     // Handle form submission
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
