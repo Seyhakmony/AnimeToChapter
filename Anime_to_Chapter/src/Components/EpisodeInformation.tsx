@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useNavigate } from 'react-router-dom';
 
+import '../Css/Ep.css';
 
 
 interface AnimeResult {
@@ -142,74 +143,78 @@ const EpisodesInformation = ({ searchQuery, setSearchQuery, setSearchResults, se
     const [fallbackData, setFallbackData] = useState<{ [episodeId: number]: { message: string, links: Array<{ title: string, url: string }> } }>({});
 
     useEffect(() => {
-    const fetchData = async () => {
-        setIsLoading(true);
-        setError(null);
+        const fetchData = async () => {
+            setIsLoading(true);
+            setError(null);
 
-        try {
-            const animeResponse = await fetch(`https://api.jikan.moe/v4/anime/${id}`);
-            if (!animeResponse.ok) {
-                throw new Error('Failed to fetch anime details');
+            try {
+                const animeResponse = await fetch(`https://api.jikan.moe/v4/anime/${id}`);
+                if (!animeResponse.ok) {
+                    throw new Error('Failed to fetch anime details');
+                }
+                const animeData: JikanAnimeResponse = await animeResponse.json();
+                setAnime(animeData.data);
+
+                await new Promise(resolve => setTimeout(resolve, 1000));
+
+                const episodesResponse = await fetch(`https://api.jikan.moe/v4/anime/${id}/episodes`);
+                if (!episodesResponse.ok) {
+                    throw new Error('Failed to fetch episodes');
+                }
+                const episodesData: JikanEpisodesResponse = await episodesResponse.json();
+                setEpisodes(episodesData.data);
+            } catch (err) {
+                setError(err instanceof Error ? err.message : 'An unknown error occurred');
+            } finally {
+                setIsLoading(false);
             }
-            const animeData: JikanAnimeResponse = await animeResponse.json();
-            setAnime(animeData.data);
+        };
 
-            await new Promise(resolve => setTimeout(resolve, 1000));
-
-            const episodesResponse = await fetch(`https://api.jikan.moe/v4/anime/${id}/episodes`);
-            if (!episodesResponse.ok) {
-                throw new Error('Failed to fetch episodes');
-            }
-            const episodesData: JikanEpisodesResponse = await episodesResponse.json();
-            setEpisodes(episodesData.data);
-        } catch (err) {
-            setError(err instanceof Error ? err.message : 'An unknown error occurred');
-        } finally {
-            setIsLoading(false);
+        if (id) {
+            fetchData();
         }
-    };
+    }, [id]);
 
-    if (id) {
-        // Clear the search query when navigating to episode info
+
+    useEffect(() => {
         setSearchQuery('');
-        fetchData();
-    }
-}, [id, setSearchQuery]);
+    }, [setSearchQuery]);
+
 
     //searching anime
     const navigate = useNavigate();
 
     // Function to search for anime
     const searchAnime = async () => {
-  if (!searchQuery.trim()) return;
+        if (!searchQuery.trim()) return;
 
-  setGlobalIsLoading(true);
-  setGlobalError(null);
+        setGlobalIsLoading(true);
+        setGlobalError(null);
 
-  try {
-    const response = await fetch(
-      `https://api.jikan.moe/v4/anime?q=${encodeURIComponent(searchQuery)}&limit=20&order_by=popularity&sort=asc`
-    );
+        try {
+            const response = await fetch(
+                `https://api.jikan.moe/v4/anime?q=${encodeURIComponent(searchQuery)}&limit=20&order_by=popularity&sort=asc`
+            );
 
-    if (!response.ok) {
-      throw new Error('Failed to fetch data from Jikan API');
-    }
+            if (!response.ok) {
+                throw new Error('Failed to fetch data from Jikan API');
+            }
 
-    const data: JikanResponse = await response.json();
-    setSearchResults(data.data);
-    
-    // Add these two lines to store the search data
-    sessionStorage.setItem('searchQuery', searchQuery);
-    sessionStorage.setItem('searchResults', JSON.stringify(data.data));
-    
-    navigate('/search');
-  } catch (err) {
-    setGlobalError(err instanceof Error ? err.message : 'An unknown error occurred');
-    setSearchResults([]);
-  } finally {
-    setGlobalIsLoading(false);
-  }
-};
+            const data: JikanResponse = await response.json();
+            setSearchResults(data.data);
+
+            // Add these two lines to store the search data
+            sessionStorage.setItem('searchQuery', searchQuery);
+            sessionStorage.setItem('searchResults', JSON.stringify(data.data));
+
+            navigate('/search');
+        } catch (err) {
+            setGlobalError(err instanceof Error ? err.message : 'An unknown error occurred');
+            setSearchResults([]);
+        } finally {
+            setGlobalIsLoading(false);
+        }
+    };
     // Handle form submission
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -456,78 +461,34 @@ const EpisodesInformation = ({ searchQuery, setSearchQuery, setSearchResults, se
 
     if (isLoading) {
         return (
-            <div style={{
-                minHeight: '100vh',
-                background: 'linear-gradient(135deg, #0f0c29 0%, #24243e 50%, #302b63 100%)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center'
-            }}>
-                <div style={{
-                    color: '#00ffff',
-                    fontSize: '24px',
-                    textShadow: '0 0 20px #00ffff',
-                    animation: 'pulse 2s infinite'
-                }}>
+            <div className="episode-loading-container">
+                <div className="episode-loading-text">
                     Loading...
                 </div>
+                <div className="episode-loading-spinner"></div>
             </div>
         );
     }
 
     if (error) {
         return (
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-                <Link
-                    to="/"
-                    style={{
-                        color: '#00ffff',
-                        textDecoration: 'none',
-                        fontSize: '2rem',
-                        fontWeight: 'bold',
-                        textShadow: '0 0 10px #00ffff',
-                        transition: 'all 0.3s ease'
-                    }}
-                    onMouseEnter={(e) => {
-                        (e.target as HTMLElement).style.textShadow = '0 0 20px #00ffff';
-                    }}
-                    onMouseLeave={(e) => {
-                        (e.target as HTMLElement).style.textShadow = '0 0 10px #00ffff';
-                    }}
-                >
-                    Anime Search
+            <div className="episode-header-container">
+                <Link to="/" className="episode-logo-link">
+                    AniChapter
                 </Link>
-
-                {/* Search Form */}
-                <form onSubmit={handleSubmit} style={{ display: 'flex', gap: '10px' }}>
+                <div className="error-message">
+                    <h2>No Anime Found</h2>
+                    <p>Anime does not exist. Please search for another anime title.</p>
+                </div>
+                <form onSubmit={handleSubmit} className="episode-search-form">
                     <input
                         type="text"
-                        value={searchQuery}
+                        value=""
                         onChange={(e) => setSearchQuery(e.target.value)}
                         placeholder="Search for another anime..."
-                        style={{
-                            padding: '8px 12px',
-                            borderRadius: '8px',
-                            border: '1px solid rgba(0, 255, 255, 0.3)',
-                            background: 'rgba(36, 36, 62, 0.8)',
-                            color: '#ffffff',
-                            fontSize: '14px',
-                            minWidth: '250px'
-                        }}
+                        className="episode-search-input"
                     />
-                    <button
-                        type="submit"
-                        style={{
-                            background: 'linear-gradient(45deg, #ff0080, #00ffff)',
-                            color: '#000',
-                            border: 'none',
-                            padding: '8px 15px',
-                            borderRadius: '8px',
-                            cursor: 'pointer',
-                            fontWeight: 'bold',
-                            fontSize: '14px'
-                        }}
-                    >
+                    <button type="submit" className="episode-search-button">
                         Search
                     </button>
                 </form>
@@ -537,57 +498,23 @@ const EpisodesInformation = ({ searchQuery, setSearchQuery, setSearchResults, se
 
     if (!anime) {
         return (
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-                <Link
-                    to="/"
-                    style={{
-                        color: '#00ffff',
-                        textDecoration: 'none',
-                        fontSize: '2rem',
-                        fontWeight: 'bold',
-                        textShadow: '0 0 10px #00ffff',
-                        transition: 'all 0.3s ease'
-                    }}
-                    onMouseEnter={(e) => {
-                        (e.target as HTMLElement).style.textShadow = '0 0 20px #00ffff';
-                    }}
-                    onMouseLeave={(e) => {
-                        (e.target as HTMLElement).style.textShadow = '0 0 10px #00ffff';
-                    }}
-                >
-                    Anime Search
+            <div className="episode-header-container">
+                <Link to="/" className="episode-logo-link">
+                    AniChapter
                 </Link>
-
-                {/* Search Form */}
-                <form onSubmit={handleSubmit} style={{ display: 'flex', gap: '10px' }}>
+                <div className="error-message">
+                    <h2>No Anime Found</h2>
+                    <p>Anime does not exist. Please search for another anime title.</p>
+                </div>
+                <form onSubmit={handleSubmit} className="episode-search-form">
                     <input
                         type="text"
-                        value={searchQuery}
+                        value=""
                         onChange={(e) => setSearchQuery(e.target.value)}
                         placeholder="Search for another anime..."
-                        style={{
-                            padding: '8px 12px',
-                            borderRadius: '8px',
-                            border: '1px solid rgba(0, 255, 255, 0.3)',
-                            background: 'rgba(36, 36, 62, 0.8)',
-                            color: '#ffffff',
-                            fontSize: '14px',
-                            minWidth: '250px'
-                        }}
+                        className="episode-search-input"
                     />
-                    <button
-                        type="submit"
-                        style={{
-                            background: 'linear-gradient(45deg, #ff0080, #00ffff)',
-                            color: '#000',
-                            border: 'none',
-                            padding: '8px 15px',
-                            borderRadius: '8px',
-                            cursor: 'pointer',
-                            fontWeight: 'bold',
-                            fontSize: '14px'
-                        }}
-                    >
+                    <button type="submit" className="episode-search-button">
                         Search
                     </button>
                 </form>
@@ -596,342 +523,132 @@ const EpisodesInformation = ({ searchQuery, setSearchQuery, setSearchResults, se
     }
 
     return (
-        <div style={{
-            minHeight: '100vh',
-            background: 'linear-gradient(135deg, #0f0c29 0%, #24243e 50%, #302b63 100%)',
-            color: '#ffffff',
-            padding: '20px'
-        }}>
-            <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
+        <div className="episode-main-container">
+            <div className="episode-content-wrapper">
                 {/* Header with logo and search */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-                    <Link
-                        to="/"
-                        style={{
-                            color: '#00ffff',
-                            textDecoration: 'none',
-                            fontSize: '2rem',
-                            fontWeight: 'bold',
-                            textShadow: '0 0 10px #00ffff',
-                            transition: 'all 0.3s ease'
-                        }}
-                        onMouseEnter={(e) => {
-                            (e.target as HTMLElement).style.textShadow = '0 0 20px #00ffff';
-                        }}
-                        onMouseLeave={(e) => {
-                            (e.target as HTMLElement).style.textShadow = '0 0 10px #00ffff';
-                        }}
-                    >
-                        Anime Search
+                <div className="episode-header-container">
+                    <Link to="/" className="episode-logo-link">
+                        AniChapter
                     </Link>
-
-                    {/* Search Form */}
-                    <form onSubmit={handleSubmit} style={{ display: 'flex', gap: '10px' }}>
+                    <form onSubmit={handleSubmit} className="episode-search-form">
                         <input
                             type="text"
-                            value={searchQuery}
+                            value=""
                             onChange={(e) => setSearchQuery(e.target.value)}
                             placeholder="Search for another anime..."
-                            style={{
-                                padding: '8px 12px',
-                                borderRadius: '8px',
-                                border: '1px solid rgba(0, 255, 255, 0.3)',
-                                background: 'rgba(36, 36, 62, 0.8)',
-                                color: '#ffffff',
-                                fontSize: '14px',
-                                minWidth: '250px'
-                            }}
+                            className="episode-search-input"
                         />
-                        <button
-                            type="submit"
-                            style={{
-                                background: 'linear-gradient(45deg, #ff0080, #00ffff)',
-                                color: '#000',
-                                border: 'none',
-                                padding: '8px 15px',
-                                borderRadius: '8px',
-                                cursor: 'pointer',
-                                fontWeight: 'bold',
-                                fontSize: '14px'
-                            }}
-                        >
+                        <button type="submit" className="episode-search-button">
                             Search
                         </button>
                     </form>
                 </div>
 
-                <div style={{
-                    background: 'rgba(36, 36, 62, 0.8)',
-                    borderRadius: '20px',
-                    overflow: 'hidden',
-                    boxShadow: '0 8px 32px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.1)',
-                    border: '1px solid rgba(255, 0, 128, 0.3)'
-                }}>
-                    <div style={{ padding: '30px' }}>
-    {/* Anime title with back arrow */}
-    <div style={{ display: 'flex', alignItems: 'center', marginBottom: '20px', justifyContent: 'center'}}>
-        <Link
-            to="/search"
-            style={{
-                color: '#00ffff',
-                textDecoration: 'none',
-                fontSize: '2rem',
-                marginRight: '15px',
-                textShadow: '0 0 10px #00ffff',
-                transition: 'all 0.3s ease',
-                display: 'flex',
-                alignItems: 'center',
-                lineHeight: '1'
-            }}
-            onMouseEnter={(e) => {
-                (e.target as HTMLElement).style.textShadow = '0 0 20px #00ffff';
-                (e.target as HTMLElement).style.transform = 'translateX(-5px)';
-            }}
-            onMouseLeave={(e) => {
-                (e.target as HTMLElement).style.textShadow = '0 0 10px #00ffff';
-                (e.target as HTMLElement).style.transform = 'translateX(0)';
-            }}
-        >
-            ←
-        </Link>
-        <h1 style={{
-            fontSize: '2.5rem',
-            fontWeight: 'bold',
-            margin: 0,
-            background: 'linear-gradient(45deg, #ff0080, #00ffff)',
-            WebkitBackgroundClip: 'text',
-            WebkitTextFillColor: 'transparent',
-            textShadow: 'none',
-            lineHeight: '1'
-        }}>
-            {getTitle(anime)}
-        </h1>
-    </div>
+                <div className="episode-anime-card">
+                    <div className="episode-anime-details">
+                        {/* Anime title with back arrow */}
+                        <div className="episode-title-section">
+                            <Link to="/search" className="episode-back-arrow">
+                                ←
+                            </Link>
+                            <h1 className="episode-anime-title">
+                                {getTitle(anime)}
+                            </h1>
+                        </div>
 
-    {foundFandomUrl ? (
-        <div style={{ marginBottom: '20px' }}>
-            <a
-                href={foundFandomUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{
-                    color: '#00ffff',
-                    textDecoration: 'none',
-                    fontSize: '14px',
-                    textShadow: '0 0 10px #00ffff'
-                }}
-            >
-                ✓ Found Fandom Wiki: {foundFandomUrl}
-            </a>
-        </div>
-    ) : (
-        <div style={{ marginBottom: '20px' }}>
-            <span style={{
-                color: '#ff0080',
-                fontSize: '14px',
-                textShadow: '0 0 10px #ff0080'
-            }}>
-                🔍 Searching for fandom wiki...
-            </span>
-        </div>
-    )}
-                        {anime.genres && anime.genres.length > 0 && (
-                            <div style={{
-                                display: 'flex',
-                                flexWrap: 'wrap',
-                                gap: '10px',
-                                marginBottom: '20px'
-                            }}>
-                                {anime.genres.map((genre) => (
-                                    <span
-                                        key={genre.mal_id}
-                                        style={{
-                                            background: 'linear-gradient(45deg, rgba(255, 0, 128, 0.3), rgba(0, 255, 255, 0.3))',
-                                            border: '1px solid rgba(255, 0, 128, 0.5)',
-                                            color: '#ffffff',
-                                            padding: '5px 12px',
-                                            borderRadius: '20px',
-                                            fontSize: '12px',
-                                            textShadow: '0 0 5px rgba(255, 255, 255, 0.5)'
-                                        }}
-                                    >
-                                        {genre.name}
-                                    </span>
-                                ))}
+                        {foundFandomUrl ? (
+                            <div className="episode-wiki-found">
+                                <a
+                                    href={foundFandomUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                >
+                                    ✓ Found Fandom Wiki: {foundFandomUrl}
+                                </a>
+                            </div>
+                        ) : (
+                            <div className="episode-wiki-searching">
+                                <span>
+                                    🔍 Searching for fandom wiki...
+                                </span>
                             </div>
                         )}
 
-                        <div style={{ display: 'flex', gap: '30px', alignItems: 'flex-start' }}>
-                            <div style={{ flexShrink: 0 }}>
+                        <div className="episode-anime-info-layout">
+                            <div className="episode-anime-image-container">
                                 <img
                                     src={anime.images.jpg.large_image_url}
                                     alt={getTitle(anime)}
-                                    style={{
-                                        width: '200px',
-                                        height: 'auto',
-                                        borderRadius: '15px',
-                                        boxShadow: '0 8px 25px rgba(0, 0, 0, 0.5), 0 0 20px rgba(255, 0, 128, 0.3)',
-                                        border: '2px solid rgba(255, 0, 128, 0.5)'
-                                    }}
+                                    className="episode-anime-image"
                                     onError={(e) => {
                                         (e.target as HTMLImageElement).src = "/api/placeholder/225/350";
                                     }}
                                 />
                             </div>
 
-                            <div style={{ flex: 1 }}>
-                                <div style={{
-                                    display: 'grid',
-                                    gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
-                                    gap: '20px',
-                                    marginBottom: '20px'
-                                }}>
+                            <div className="episode-anime-info">
+                                <div className="episode-info-grid">
                                     <div>
-                                        <p><span style={{ color: '#00ffff', fontWeight: 'bold' }}>Status:</span> {anime.status || 'Unknown'}</p>
-                                        <p><span style={{ color: '#00ffff', fontWeight: 'bold' }}>Episodes:</span> {anime.episodes || 'Unknown'}</p>
-                                        <p><span style={{ color: '#00ffff', fontWeight: 'bold' }}>Rating:</span> {anime.rating || 'Unknown'}</p>
+                                        <p><span className="episode-info-label">Status:</span> {anime.status || 'Unknown'}</p>
+                                        <p><span className="episode-info-label">Episodes:</span> {anime.episodes || 'Unknown'}</p>
+                                        <p><span className="episode-info-label">Rating:</span> {anime.rating || 'Unknown'}</p>
                                     </div>
                                     <div>
-                                        <p><span style={{ color: '#00ffff', fontWeight: 'bold' }}>Season:</span> {anime.season && anime.year ? `${anime.season.charAt(0).toUpperCase() + anime.season.slice(1)} ${anime.year}` : 'Unknown'}</p>
-                                        <p><span style={{ color: '#00ffff', fontWeight: 'bold' }}>Score:</span> {anime.score ? `${anime.score} (${anime.scored_by?.toLocaleString()} votes)` : 'N/A'}</p>
-                                        <p><span style={{ color: '#00ffff', fontWeight: 'bold' }}>Rank:</span> {anime.rank ? `#${anime.rank}` : 'N/A'}</p>
+                                        <p><span className="episode-info-label">Season:</span> {anime.season && anime.year ? `${anime.season.charAt(0).toUpperCase() + anime.season.slice(1)} ${anime.year}` : 'Unknown'}</p>
+                                        <p><span className="episode-info-label">Score:</span> {anime.score ? `${anime.score} (${anime.scored_by?.toLocaleString()} votes)` : 'N/A'}</p>
+                                        <p><span className="episode-info-label">Rank:</span> {anime.rank ? `#${anime.rank}` : 'N/A'}</p>
                                     </div>
                                 </div>
 
                                 <div>
-                                    <p><span style={{ color: '#00ffff', fontWeight: 'bold' }}>Aired:</span> {formatDate(anime.aired.from)} to {anime.aired.to ? formatDate(anime.aired.to) : 'Present'}</p>
+                                    <p><span className="episode-info-label">Aired:</span> {formatDate(anime.aired.from)} to {anime.aired.to ? formatDate(anime.aired.to) : 'Present'}</p>
                                 </div>
                             </div>
                         </div>
 
                         {anime.synopsis && (
-                            <div style={{ marginTop: '30px' }}>
-                                <h3 style={{
-                                    fontSize: '1.5rem',
-                                    fontWeight: 'bold',
-                                    marginBottom: '15px',
-                                    color: '#ff0080',
-                                    textShadow: '0 0 10px #ff0080'
-                                }}>
+                            <div className="episode-synopsis-section">
+                                <h3 className="episode-synopsis-title">
                                     Summary
                                 </h3>
-                                <p style={{
-                                    color: '#e0e0e0',
-                                    lineHeight: '1.6',
-                                    background: 'rgba(15, 12, 41, 0.5)',
-                                    padding: '20px',
-                                    borderRadius: '10px',
-                                    border: '1px solid rgba(0, 255, 255, 0.2)'
-                                }}>
+                                <p className="episode-synopsis-text">
                                     {anime.synopsis}
                                 </p>
                             </div>
                         )}
                     </div>
 
-                    <div style={{
-                        padding: '30px',
-                        borderTop: '1px solid rgba(255, 0, 128, 0.3)',
-                        background: 'rgba(15, 12, 41, 0.5)'
-                    }}>
-                        <h2 style={{
-                            fontSize: '2rem',
-                            fontWeight: 'bold',
-                            marginBottom: '30px',
-                            color: '#00ffff',
-                            textShadow: '0 0 15px #00ffff'
-                        }}>
+                    <div className="episode-episodes-section">
+                        <h2 className="episode-episodes-title">
                             Episodes
                         </h2>
 
                         {episodes.length > 0 ? (
-                            <div style={{
-                                display: 'grid',
-                                gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))',
-                                gap: '20px'
-                            }}>
+                            <div className="episode-episodes-grid">
                                 {episodes.map((episode, index) => (
-                                    <div
-                                        key={episode.mal_id}
-                                        style={{
-                                            background: 'rgba(36, 36, 62, 0.8)',
-                                            border: '1px solid rgba(255, 0, 128, 0.3)',
-                                            borderRadius: '15px',
-                                            overflow: 'hidden',
-                                            transition: 'all 0.3s ease',
-                                            boxShadow: '0 4px 15px rgba(0, 0, 0, 0.3)'
-                                        }}
-                                        onMouseEnter={(e) => {
-                                            e.currentTarget.style.transform = 'translateY(-5px)';
-                                            e.currentTarget.style.boxShadow = '0 8px 25px rgba(255, 0, 128, 0.4)';
-                                        }}
-                                        onMouseLeave={(e) => {
-                                            e.currentTarget.style.transform = 'translateY(0)';
-                                            e.currentTarget.style.boxShadow = '0 4px 15px rgba(0, 0, 0, 0.3)';
-                                        }}
-                                    >
-                                        <div style={{ padding: '20px' }}>
-                                            <div style={{
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                justifyContent: 'space-between',
-                                                marginBottom: '15px'
-                                            }}>
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: '15px', flex: 1 }}>
-                                                    <span style={{
-                                                        background: 'linear-gradient(45deg, #ff0080, #00ffff)',
-                                                        color: '#000',
-                                                        padding: '8px 12px',
-                                                        borderRadius: '8px',
-                                                        fontSize: '14px',
-                                                        fontWeight: 'bold',
-                                                        minWidth: '40px',
-                                                        textAlign: 'center'
-                                                    }}>
+                                    <div key={episode.mal_id} className="episode-episode-card">
+                                        <div className="episode-episode-content">
+                                            <div className="episode-episode-header">
+                                                <div className="episode-episode-main-info">
+                                                    <span className="episode-episode-number">
                                                         {index + 1}
                                                     </span>
-                                                    <div style={{
-                                                        width: '2px',
-                                                        height: '30px',
-                                                        background: 'linear-gradient(45deg, #ff0080, #00ffff)'
-                                                    }}></div>
-                                                    <h3 style={{
-                                                        fontSize: '16px',
-                                                        fontWeight: 'bold',
-                                                        margin: 0,
-                                                        color: '#ffffff',
-                                                        flex: 1
-                                                    }}>
+                                                    <div className="episode-episode-divider"></div>
+                                                    <h3 className="episode-episode-title">
                                                         {episode.title}
                                                     </h3>
                                                 </div>
 
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+                                                <div className="episode-episode-meta">
                                                     {episode.aired && (
-                                                        <p style={{
-                                                            fontSize: '12px',
-                                                            color: '#00ffff',
-                                                            margin: 0,
-                                                            textShadow: '0 0 5px #00ffff'
-                                                        }}>
+                                                        <p className="episode-episode-date">
                                                             {formatDate(episode.aired)}
                                                         </p>
                                                     )}
                                                     <button
                                                         onClick={() => toggleInfo(episode.mal_id, episode.title, episode.episode)}
                                                         disabled={wikiSubdomain === "unknown"}
-                                                        style={{
-                                                            background: foundFandomUrl
-                                                                ? 'linear-gradient(45deg, #ff0080, #00ffff)'
-                                                                : 'rgba(128, 128, 128, 0.5)',
-                                                            color: foundFandomUrl ? '#000' : '#666',
-                                                            border: 'none',
-                                                            padding: '8px 15px',
-                                                            borderRadius: '8px',
-                                                            cursor: foundFandomUrl ? 'pointer' : 'not-allowed',
-                                                            fontWeight: 'bold',
-                                                            transition: 'all 0.3s ease'
-                                                        }}
+                                                        className={`episode-toggle-button ${foundFandomUrl ? 'episode-toggle-button-enabled' : 'episode-toggle-button-disabled'}`}
                                                     >
                                                         {showAiredStates[episode.mal_id] ? '▲' : '▼'}
                                                     </button>
@@ -939,29 +656,14 @@ const EpisodesInformation = ({ searchQuery, setSearchQuery, setSearchResults, se
                                             </div>
 
                                             {(episode.filler || episode.recap) && (
-                                                <div style={{ marginBottom: '10px' }}>
+                                                <div className="episode-episode-tags">
                                                     {episode.filler && (
-                                                        <span style={{
-                                                            background: 'rgba(255, 193, 7, 0.3)',
-                                                            color: '#ffc107',
-                                                            padding: '4px 8px',
-                                                            borderRadius: '12px',
-                                                            fontSize: '10px',
-                                                            marginRight: '8px',
-                                                            border: '1px solid #ffc107'
-                                                        }}>
+                                                        <span className="episode-filler-tag">
                                                             Filler
                                                         </span>
                                                     )}
                                                     {episode.recap && (
-                                                        <span style={{
-                                                            background: 'rgba(108, 117, 125, 0.3)',
-                                                            color: '#6c757d',
-                                                            padding: '4px 8px',
-                                                            borderRadius: '12px',
-                                                            fontSize: '10px',
-                                                            border: '1px solid #6c757d'
-                                                        }}>
+                                                        <span className="episode-recap-tag">
                                                             Recap
                                                         </span>
                                                     )}
@@ -969,32 +671,14 @@ const EpisodesInformation = ({ searchQuery, setSearchQuery, setSearchResults, se
                                             )}
 
                                             {showAiredStates[episode.mal_id] && (
-                                                <div style={{
-                                                    marginTop: '15px',
-                                                    padding: '15px',
-                                                    background: 'rgba(15, 12, 41, 0.7)',
-                                                    borderRadius: '10px',
-                                                    border: '1px solid rgba(0, 255, 255, 0.2)'
-                                                }}>
+                                                <div className="episode-episode-details">
                                                     {chapters[episode.mal_id] && chapters[episode.mal_id].length > 0 ? (
                                                         <div>
-                                                            <h4 style={{
-                                                                color: '#00ffff',
-                                                                fontSize: '14px',
-                                                                marginBottom: '10px',
-                                                                textShadow: '0 0 5px #00ffff'
-                                                            }}>
+                                                            <h4 className="episode-chapters-title">
                                                                 Episode Chapters:
                                                             </h4>
-                                                            <div style={{ maxHeight: '200px', overflowY: 'auto' }}>
-                                                                <p style={{
-                                                                    color: '#e0e0e0',
-                                                                    fontSize: '13px',
-                                                                    lineHeight: '1.5',
-                                                                    margin: '8px 0',
-                                                                    paddingLeft: '10px',
-                                                                    borderLeft: '2px solid rgba(255, 0, 128, 0.3)'
-                                                                }}>
+                                                            <div className="episode-chapters-container">
+                                                                <p className="episode-chapters-text">
                                                                     {chapters[episode.mal_id].join(', ')}
                                                                 </p>
                                                             </div>
@@ -1004,26 +688,7 @@ const EpisodesInformation = ({ searchQuery, setSearchQuery, setSearchResults, se
                                                                         href={successfulUrls[episode.mal_id]}
                                                                         target="_blank"
                                                                         rel="noopener noreferrer"
-                                                                        style={{
-                                                                            color: '#00ffff',
-                                                                            textDecoration: 'none',
-                                                                            fontSize: '12px',
-                                                                            textShadow: '0 0 5px #00ffff',
-                                                                            background: 'rgba(0, 255, 255, 0.1)',
-                                                                            padding: '6px 10px',
-                                                                            borderRadius: '6px',
-                                                                            border: '1px solid rgba(0, 255, 255, 0.3)',
-                                                                            display: 'inline-block',
-                                                                            transition: 'all 0.3s ease'
-                                                                        }}
-                                                                        onMouseEnter={(e) => {
-                                                                            (e.target as HTMLElement).style.background = 'rgba(0, 255, 255, 0.2)';
-                                                                            (e.target as HTMLElement).style.textShadow = '0 0 10px #00ffff';
-                                                                        }}
-                                                                        onMouseLeave={(e) => {
-                                                                            (e.target as HTMLElement).style.background = 'rgba(0, 255, 255, 0.1)';
-                                                                            (e.target as HTMLElement).style.textShadow = '0 0 5px #00ffff';
-                                                                        }}
+                                                                        className="episode-episode-link"
                                                                     >
                                                                         📖 View Full Episode Page
                                                                     </a>
@@ -1033,40 +698,17 @@ const EpisodesInformation = ({ searchQuery, setSearchQuery, setSearchResults, se
                                                         </div>
                                                     ) : fallbackData[episode.mal_id] ? (
                                                         <div>
-                                                            <p style={{
-                                                                color: '#ff0080',
-                                                                fontSize: '14px',
-                                                                marginBottom: '15px',
-                                                                textShadow: '0 0 5px #ff0080'
-                                                            }}>
+                                                            <p className="episode-fallback-message">
                                                                 {fallbackData[episode.mal_id].message}
                                                             </p>
-                                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                                                            <div className="episode-fallback-links">
                                                                 {fallbackData[episode.mal_id].links.map((link, linkIndex) => (
                                                                     <a
                                                                         key={linkIndex}
                                                                         href={link.url}
                                                                         target="_blank"
                                                                         rel="noopener noreferrer"
-                                                                        style={{
-                                                                            color: '#00ffff',
-                                                                            textDecoration: 'none',
-                                                                            fontSize: '13px',
-                                                                            padding: '8px 12px',
-                                                                            background: 'rgba(0, 255, 255, 0.1)',
-                                                                            borderRadius: '8px',
-                                                                            border: '1px solid rgba(0, 255, 255, 0.3)',
-                                                                            transition: 'all 0.3s ease',
-                                                                            display: 'block'
-                                                                        }}
-                                                                        onMouseEnter={(e) => {
-                                                                            (e.target as HTMLElement).style.background = 'rgba(0, 255, 255, 0.2)';
-                                                                            (e.target as HTMLElement).style.textShadow = '0 0 10px #00ffff';
-                                                                        }}
-                                                                        onMouseLeave={(e) => {
-                                                                            (e.target as HTMLElement).style.background = 'rgba(0, 255, 255, 0.1)';
-                                                                            (e.target as HTMLElement).style.textShadow = 'none';
-                                                                        }}
+                                                                        className="episode-fallback-link"
                                                                     >
                                                                         {link.title}
                                                                     </a>
@@ -1074,11 +716,7 @@ const EpisodesInformation = ({ searchQuery, setSearchQuery, setSearchResults, se
                                                             </div>
                                                         </div>
                                                     ) : (
-                                                        <p style={{
-                                                            color: '#666',
-                                                            fontSize: '13px',
-                                                            fontStyle: 'italic'
-                                                        }}>
+                                                        <p className="episode-loading-info">
                                                             {wikiSubdomain === "unknown"
                                                                 ? "No Fandom wiki found for this anime"
                                                                 : "Loading episode information..."}
@@ -1091,12 +729,7 @@ const EpisodesInformation = ({ searchQuery, setSearchQuery, setSearchResults, se
                                 ))}
                             </div>
                         ) : (
-                            <p style={{
-                                color: '#666',
-                                fontSize: '16px',
-                                textAlign: 'center',
-                                padding: '40px'
-                            }}>
+                            <p className="episode-no-episodes">
                                 No episodes available
                             </p>
                         )}

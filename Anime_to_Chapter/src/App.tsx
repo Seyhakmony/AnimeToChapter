@@ -23,7 +23,7 @@ function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Add this useEffect to restore data from sessionStorage
+ 
   useEffect(() => {
     const savedQuery = sessionStorage.getItem('searchQuery');
     const savedResults = sessionStorage.getItem('searchResults');

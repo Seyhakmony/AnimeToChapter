@@ -1,7 +1,9 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-// Define TypeScript interfaces
+import '../Css/HomeSearch.css';
+import '../Css/homeExtra.css';
+
 interface AnimeResult {
   mal_id: number;
   title: string;
@@ -29,40 +31,48 @@ interface HomeProps {
   setError: (error: string | null) => void;
 }
 
-const Home = ({ searchQuery, setSearchQuery, setSearchResults, setIsLoading, setError }: HomeProps) => {
+const Home = ({ setSearchQuery, setSearchResults, setIsLoading, setError }: HomeProps) => {
   const navigate = useNavigate();
+  
+  // Local state for the input field
+  const [localSearchQuery, setLocalSearchQuery] = useState('');
 
-  // Function to search for anime
+  useEffect(() => {
+    setSearchQuery('');
+    setLocalSearchQuery(''); // Clear local state as well
+  }, [setSearchQuery]);
+
   const searchAnime = async () => {
-  if (!searchQuery.trim()) return;
-  
-  setIsLoading(true);
-  setError(null);
-  
-  try {
-    const response = await fetch(
-      `https://api.jikan.moe/v4/anime?q=${encodeURIComponent(searchQuery)}&limit=20&order_by=popularity&sort=asc`
-    );
-    
-    if (!response.ok) {
-      throw new Error('Failed to fetch data from Jikan API');
+    if (!localSearchQuery.trim()) return;
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const response = await fetch(
+        `https://api.jikan.moe/v4/anime?q=${encodeURIComponent(localSearchQuery)}&limit=20&order_by=popularity&sort=asc`
+      );
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch data from Jikan API');
+      }
+
+      const data: JikanResponse = await response.json();
+      setSearchResults(data.data);
+      setSearchQuery(localSearchQuery); // Update global state with the search term
+
+
+      sessionStorage.setItem('searchQuery', localSearchQuery);
+      sessionStorage.setItem('searchResults', JSON.stringify(data.data));
+
+      navigate('/search');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An unknown error occurred');
+      setSearchResults([]);
+    } finally {
+      setIsLoading(false);
     }
-    
-    const data: JikanResponse = await response.json();
-    setSearchResults(data.data);
-    
-    // Store search data in sessionStorage
-    sessionStorage.setItem('searchQuery', searchQuery);
-    sessionStorage.setItem('searchResults', JSON.stringify(data.data));
-    
-    navigate('/search');
-  } catch (err) {
-    setError(err instanceof Error ? err.message : 'An unknown error occurred');
-    setSearchResults([]);
-  } finally {
-    setIsLoading(false);
-  }
-};
+  };
 
   // Handle form submission
   const handleSubmit = (e: React.FormEvent) => {
@@ -71,27 +81,29 @@ const Home = ({ searchQuery, setSearchQuery, setSearchResults, setIsLoading, set
   };
 
   return (
-    <div className="max-w-4xl mx-auto p-4">
-      <h1 className="text-3xl font-bold mb-6 text-center">Anime Search</h1>
-      
-      {/* Search Form */}
-      <form onSubmit={handleSubmit} className="mb-8">
-        <div className="flex gap-2">
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search for an anime..."
-            className="flex-grow p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-          <button 
-            type="submit" 
-            className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded"
-          >
-            Search
-          </button>
-        </div>
-      </form>
+    <div className="home-container">
+      <div className="home-content-wrapper">
+        <h1 className="home-title">AniChapter</h1>
+        <p className="home-subtitle">Find the chapter you are looking for</p>
+
+        <form onSubmit={handleSubmit} className="home-search-form">
+          <div className="home-search-container">
+            <input
+              type="text"
+              value={localSearchQuery}
+              onChange={(e) => setLocalSearchQuery(e.target.value)}
+              placeholder="Enter anime title to search the database..."
+              className="home-search-input"
+            />
+            <button
+              type="submit"
+              className="home-search-button"
+            >
+              SEARCH
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 
