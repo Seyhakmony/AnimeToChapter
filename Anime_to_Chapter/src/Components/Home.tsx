@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import '../Css/HomeSearch.css';
-import '../Css/homeExtra.css';
+import '../Css/HomeExtra.css';
 
 interface AnimeResult {
   mal_id: number;
