@@ -145,6 +145,9 @@ const EpisodesInformation = ({ searchQuery, setSearchQuery, setSearchResults, se
 
     const [localSearchQuery, setlocalSearchQuery] = useState('');
 
+    const [currentPage, setCurrentPage] = useState(1);
+    const [episodesPerPage] = useState(48);
+
     useEffect(() => {
         const fetchData = async () => {
             setIsLoading(true);
@@ -160,7 +163,7 @@ const EpisodesInformation = ({ searchQuery, setSearchQuery, setSearchResults, se
 
                 await new Promise(resolve => setTimeout(resolve, 1000));
 
-                // Fetch all episodes from all pages
+               
                 let allEpisodes: Episode[] = [];
                 let currentPage = 1;
                 let hasNextPage = true;
@@ -176,7 +179,7 @@ const EpisodesInformation = ({ searchQuery, setSearchQuery, setSearchResults, se
                     hasNextPage = episodesData.pagination.has_next_page;
                     currentPage++;
 
-                    // Add delay between requests to respect rate limits
+                    
                     if (hasNextPage) {
                         await new Promise(resolve => setTimeout(resolve, 1000));
                     }
@@ -198,15 +201,19 @@ const EpisodesInformation = ({ searchQuery, setSearchQuery, setSearchResults, se
 
     useEffect(() => {
         setSearchQuery('');
+        setlocalSearchQuery('');
     }, [setSearchQuery]);
 
+
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [id]);
 
     //searching anime
     const navigate = useNavigate();
 
-    // Function to search for anime
     const searchAnime = async () => {
-        if (!searchQuery.trim()) return;
+        if (!localSearchQuery.trim()) return; 
 
         setGlobalIsLoading(true);
         setGlobalError(null);
@@ -225,8 +232,8 @@ const EpisodesInformation = ({ searchQuery, setSearchQuery, setSearchResults, se
             const data: JikanResponse = await response.json();
             setSearchResults(data.data);
 
-            // Add these two lines to store the search data
-            sessionStorage.setItem('searchQuery', searchQuery);
+            
+            sessionStorage.setItem('searchQuery', localSearchQuery);
             sessionStorage.setItem('searchResults', JSON.stringify(data.data));
 
             navigate('/search');
@@ -237,7 +244,8 @@ const EpisodesInformation = ({ searchQuery, setSearchQuery, setSearchResults, se
             setGlobalIsLoading(false);
         }
     };
-    // Handle form submission
+
+    //forms
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         searchAnime();
@@ -484,6 +492,16 @@ const EpisodesInformation = ({ searchQuery, setSearchQuery, setSearchResults, se
         }
     };
 
+    const getPaginatedEpisodes = () => {
+        const startIndex = (currentPage - 1) * episodesPerPage;
+        const endIndex = startIndex + episodesPerPage;
+        return episodes.slice(startIndex, endIndex);
+    };
+
+    const getTotalPages = () => {
+        return Math.ceil(episodes.length / episodesPerPage);
+    };
+
     if (isLoading) {
         return (
             <div className="episode-loading-container">
@@ -571,7 +589,7 @@ const EpisodesInformation = ({ searchQuery, setSearchQuery, setSearchResults, se
 
                 <div className="episode-anime-card">
                     <div className="episode-anime-details">
-                        {/* Anime title with back arrow */}
+
                         <div className="episode-title-section">
                             <Link to="/search" className="episode-back-arrow">
                                 ←
@@ -594,7 +612,7 @@ const EpisodesInformation = ({ searchQuery, setSearchQuery, setSearchResults, se
                         ) : (
                             <div className="episode-wiki-searching">
                                 <span>
-                                    🔍 Searching for fandom wiki...
+                                    🔍 Searching the Fandom wiki... Please wait. If it takes too long, try refreshing — the server may be handling too many requests.
                                 </span>
                             </div>
                         )}
@@ -649,125 +667,172 @@ const EpisodesInformation = ({ searchQuery, setSearchQuery, setSearchResults, se
                         </h2>
 
                         {episodes.length > 0 ? (
-                            <div className="episode-episodes-grid">
-                                {episodes.map((episode, index) => (
-                                    <div key={episode.mal_id} className="episode-episode-card">
-                                        <div className="episode-episode-content">
-                                            <div className="episode-episode-header">
-                                                <div className="episode-episode-main-info">
-                                                    <span className="episode-episode-number">
-                                                        {index + 1}
-                                                    </span>
-                                                    <div className="episode-episode-divider"></div>
-                                                    <h3 className="episode-episode-title">
-                                                        {episode.title}
-                                                    </h3>
-                                                </div>
+                            <>
+                                {episodes.length > episodesPerPage && (
+                                    <div className="episode-pagination-info">
+                                        <p>
+                                            Showing episodes {((currentPage - 1) * episodesPerPage) + 1}-{Math.min(currentPage * episodesPerPage, episodes.length)} of {episodes.length}
+                                        </p>
+                                    </div>
+                                )}
 
-                                                <div className="episode-episode-meta">
-                                                    {episode.aired && (
-                                                        <p className="episode-episode-date">
-                                                            {formatDate(episode.aired)}
-                                                        </p>
-                                                    )}
-                                                    <button
-                                                        onClick={() => toggleInfo(episode.mal_id, episode.title, episode.episode)}
-                                                        disabled={wikiSubdomain === "unknown"}
-                                                        className={`episode-toggle-button ${foundFandomUrl ? 'episode-toggle-button-enabled' : 'episode-toggle-button-disabled'}`}
-                                                    >
-                                                        {showAiredStates[episode.mal_id] ? '▲' : '▼'}
-                                                    </button>
-                                                </div>
-                                            </div>
+                                <div className="episode-episodes-grid">
+                                    {getPaginatedEpisodes().map((episode, index) => {
 
-                                            {(episode.filler || episode.recap) && (
-                                                <div className="episode-episode-tags">
-                                                    {episode.filler && (
-                                                        <span className="episode-filler-tag">
-                                                            Filler
-                                                        </span>
-                                                    )}
-                                                    {episode.recap && (
-                                                        <span className="episode-recap-tag">
-                                                            Recap
-                                                        </span>
-                                                    )}
-                                                </div>
-                                            )}
+                                        const actualEpisodeNumber = ((currentPage - 1) * episodesPerPage) + index + 1;
 
-                                            {showAiredStates[episode.mal_id] && (
-                                                <div className="episode-episode-details">
-                                                    {chapters[episode.mal_id] && chapters[episode.mal_id].length > 0 ? (
-                                                        <div>
-                                                            <h4 className="episode-chapters-title">
-                                                                Episode Chapters:
-                                                            </h4>
-                                                            <div className="episode-chapters-container">
-                                                                <p className="episode-chapters-text">
-                                                                    {chapters[episode.mal_id].join(', ')}
+                                        return (
+                                            <div key={episode.mal_id} className="episode-episode-card">
+                                                <div className="episode-episode-content">
+                                                    <div className="episode-episode-header">
+                                                        <div className="episode-episode-main-info">
+                                                            <span className="episode-episode-number">
+                                                                {actualEpisodeNumber}
+                                                            </span>
+                                                            <div className="episode-episode-divider"></div>
+                                                            <h3 className="episode-episode-title">
+                                                                {episode.title}
+                                                            </h3>
+                                                        </div>
+
+                                                        <div className="episode-episode-meta">
+                                                            {episode.aired && (
+                                                                <p className="episode-episode-date">
+                                                                    {formatDate(episode.aired)}
                                                                 </p>
-                                                            </div>
-                                                            {successfulUrls[episode.mal_id] && (
-                                                                <div style={{ marginBottom: '15px' }}>
-                                                                    <a
-                                                                        href={successfulUrls[episode.mal_id]}
-                                                                        target="_blank"
-                                                                        rel="noopener noreferrer"
-                                                                        className="episode-episode-link"
-                                                                    >
-                                                                        📖 View Full Episode Page
-                                                                    </a>
-                                                                </div>
+                                                            )}
+                                                            <button
+                                                                onClick={() => toggleInfo(episode.mal_id, episode.title, episode.episode)}
+                                                                disabled={wikiSubdomain === "unknown"}
+                                                                className={`episode-toggle-button ${foundFandomUrl ? 'episode-toggle-button-enabled' : 'episode-toggle-button-disabled'}`}
+                                                            >
+                                                                {showAiredStates[episode.mal_id] ? '▲' : '▼'}
+                                                            </button>
+                                                        </div>
+                                                    </div>
+
+                                                    {(episode.filler || episode.recap) && (
+                                                        <div className="episode-episode-tags">
+                                                            {episode.filler && (
+                                                                <span className="episode-filler-tag">
+                                                                    Filler
+                                                                </span>
+                                                            )}
+                                                            {episode.recap && (
+                                                                <span className="episode-recap-tag">
+                                                                    Recap
+                                                                </span>
                                                             )}
                                                         </div>
-                                                    ) : successfulUrls[episode.mal_id] && successfulUrls[episode.mal_id] !== '' ? (
-                                                        <div>
-                                                            <p className="episode-fallback-message">
-                                                                No Chapter's Found
-                                                            </p>
-                                                            <div style={{ marginBottom: '15px' }}>
-                                                                <a
-                                                                    href={successfulUrls[episode.mal_id]}
-                                                                    target="_blank"
-                                                                    rel="noopener noreferrer"
-                                                                    className="episode-episode-link"
-                                                                >
-                                                                    📖 View Full Episode Page
-                                                                </a>
-                                                            </div>
+                                                    )}
+
+                                                    {showAiredStates[episode.mal_id] && (
+                                                        <div className="episode-episode-details">
+                                                            {chapters[episode.mal_id] && chapters[episode.mal_id].length > 0 ? (
+                                                                <div>
+                                                                    <h4 className="episode-chapters-title">
+                                                                        Episode Chapters:
+                                                                    </h4>
+                                                                    <div className="episode-chapters-container">
+                                                                        <p className="episode-chapters-text">
+                                                                            {chapters[episode.mal_id].join(', ')}
+                                                                        </p>
+                                                                    </div>
+                                                                    {successfulUrls[episode.mal_id] && (
+                                                                        <div style={{ marginBottom: '15px' }}>
+                                                                            <a
+                                                                                href={successfulUrls[episode.mal_id]}
+                                                                                target="_blank"
+                                                                                rel="noopener noreferrer"
+                                                                                className="episode-episode-link"
+                                                                            >
+                                                                                📖 View Full Episode Page
+                                                                            </a>
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            ) : successfulUrls[episode.mal_id] && successfulUrls[episode.mal_id] !== '' ? (
+                                                                <div>
+                                                                    <p className="episode-fallback-message">
+                                                                        No Chapter's Found
+                                                                    </p>
+                                                                    <div style={{ marginBottom: '15px' }}>
+                                                                        <a
+                                                                            href={successfulUrls[episode.mal_id]}
+                                                                            target="_blank"
+                                                                            rel="noopener noreferrer"
+                                                                            className="episode-episode-link"
+                                                                        >
+                                                                            📖 View Full Episode Page
+                                                                        </a>
+                                                                    </div>
+                                                                </div>
+                                                            ) : fallbackData[episode.mal_id] ? (
+                                                                <div>
+                                                                    <p className="episode-fallback-message">
+                                                                        {fallbackData[episode.mal_id].message}
+                                                                    </p>
+                                                                    <div className="episode-fallback-links">
+                                                                        {fallbackData[episode.mal_id].links.map((link, linkIndex) => (
+                                                                            <a
+                                                                                key={linkIndex}
+                                                                                href={link.url}
+                                                                                target="_blank"
+                                                                                rel="noopener noreferrer"
+                                                                                className="episode-fallback-link"
+                                                                            >
+                                                                                {link.title}
+                                                                            </a>
+                                                                        ))}
+                                                                    </div>
+                                                                </div>
+                                                            ) : (
+                                                                <p className="episode-loading-info">
+                                                                    {wikiSubdomain === "unknown"
+                                                                        ? "No Fandom wiki found for this anime"
+                                                                        : "Loading episode information..."}
+                                                                </p>
+                                                            )}
                                                         </div>
-                                                    ) : fallbackData[episode.mal_id] ? (
-                                                        <div>
-                                                            <p className="episode-fallback-message">
-                                                                {fallbackData[episode.mal_id].message}
-                                                            </p>
-                                                            <div className="episode-fallback-links">
-                                                                {fallbackData[episode.mal_id].links.map((link, linkIndex) => (
-                                                                    <a
-                                                                        key={linkIndex}
-                                                                        href={link.url}
-                                                                        target="_blank"
-                                                                        rel="noopener noreferrer"
-                                                                        className="episode-fallback-link"
-                                                                    >
-                                                                        {link.title}
-                                                                    </a>
-                                                                ))}
-                                                            </div>
-                                                        </div>
-                                                    ) : (
-                                                        <p className="episode-loading-info">
-                                                            {wikiSubdomain === "unknown"
-                                                                ? "No Fandom wiki found for this anime"
-                                                                : "Loading episode information..."}
-                                                        </p>
                                                     )}
                                                 </div>
-                                            )}
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+
+                                {episodes.length > episodesPerPage && (
+                                    <div className="episode-pagination-controls">
+                                        <button
+                                            onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                                            disabled={currentPage === 1}
+                                            className="episode-pagination-button"
+                                        >
+                                            Previous
+                                        </button>
+
+                                        <div className="episode-pagination-numbers">
+                                            {Array.from({ length: getTotalPages() }, (_, i) => i + 1).map(pageNum => (
+                                                <button
+                                                    key={pageNum}
+                                                    onClick={() => setCurrentPage(pageNum)}
+                                                    className={`episode-pagination-number ${currentPage === pageNum ? 'active' : ''}`}
+                                                >
+                                                    {pageNum}
+                                                </button>
+                                            ))}
                                         </div>
+
+                                        <button
+                                            onClick={() => setCurrentPage(prev => Math.min(prev + 1, getTotalPages()))}
+                                            disabled={currentPage === getTotalPages()}
+                                            className="episode-pagination-button"
+                                        >
+                                            Next
+                                        </button>
                                     </div>
-                                ))}
-                            </div>
+                                )}
+                            </>
                         ) : (
                             <p className="episode-no-episodes">
                                 No episodes available

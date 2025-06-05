@@ -34,12 +34,12 @@ interface HomeProps {
 const Home = ({ setSearchQuery, setSearchResults, setIsLoading, setError }: HomeProps) => {
   const navigate = useNavigate();
   
-  // Local state for the input field
+
   const [localSearchQuery, setLocalSearchQuery] = useState('');
 
   useEffect(() => {
     setSearchQuery('');
-    setLocalSearchQuery(''); // Clear local state as well
+    setLocalSearchQuery('');
   }, [setSearchQuery]);
 
   const searchAnime = async () => {
@@ -59,7 +59,7 @@ const Home = ({ setSearchQuery, setSearchResults, setIsLoading, setError }: Home
 
       const data: JikanResponse = await response.json();
       setSearchResults(data.data);
-      setSearchQuery(localSearchQuery); // Update global state with the search term
+      setSearchQuery(localSearchQuery);
 
 
       sessionStorage.setItem('searchQuery', localSearchQuery);
@@ -74,7 +74,8 @@ const Home = ({ setSearchQuery, setSearchResults, setIsLoading, setError }: Home
     }
   };
 
-  // Handle form submission
+
+  
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     searchAnime();

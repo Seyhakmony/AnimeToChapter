@@ -44,7 +44,7 @@ const Searched = ({
   const [localSearchQuery, setLocalSearchQuery] = useState('');
 
   useEffect(() => {
-    // If we have state from navigation (back button), restore the search
+    
     if (state?.preserveResults && state.searchQuery) {
       
       if (searchResults.length === 0 && !isLoading) {
@@ -84,7 +84,7 @@ useEffect(() => {
       setSearchResults(data.data);
       setSearchQuery(query);
 
-      // Store search data in sessionStorage
+
       sessionStorage.setItem('searchQuery', query);
       sessionStorage.setItem('searchResults', JSON.stringify(data.data));
 
