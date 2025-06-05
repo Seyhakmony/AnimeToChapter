@@ -632,7 +632,7 @@ def clean_for_url(text):
 
 def test_episode_url(url, episode_title="", episode_number=""):
     """
-    Test if a Fandom episode URL is valid and matches the expected episode number or title
+    Test if a Fandom episode URL is valid, matches the expected episode, AND contains chapter information
     """
     try:
         response = requests.get(url, timeout=8, headers={
@@ -684,12 +684,22 @@ def test_episode_url(url, episode_title="", episode_number=""):
                 print(f"[TEST_URL] ✅ Found match for '{indicator}' in: {url}")
                 break
 
-        return found_match
+        if not found_match:
+            print(f"[TEST_URL] ❌ No episode match found in: {url}")
+            return False
+
+        # NEW: Check if the page contains chapter information
+        chapters = extract_chapter_info(soup)
+        if not chapters:
+            print(f"[TEST_URL] ❌ No chapter information found in: {url}")
+            return False
+        
+        print(f"[TEST_URL] ✅ Found {len(chapters)} chapters in: {url}")
+        return True
 
     except Exception as e:
         print(f"[TEST_URL] ❌ Error testing {url}: {e}")
         return False
-
 
 @app.route('/get-episode-content', methods=['POST'])
 def get_episode_content():
