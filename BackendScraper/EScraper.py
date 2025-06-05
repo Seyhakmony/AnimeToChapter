@@ -30,14 +30,14 @@ def create_driver():
     options.add_experimental_option("excludeSwitches", ["enable-automation"])
     options.add_experimental_option('useAutomationExtension', False)
     options.add_argument("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-    
+
     # Add prefs to reduce resource usage
     prefs = {
         "profile.managed_default_content_settings.images": 2,
         "profile.default_content_setting_values.notifications": 2
     }
     options.add_experimental_option("prefs", prefs)
-    
+
     try:
         driver = webdriver.Chrome(options=options)
         driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
@@ -62,7 +62,7 @@ def search_anime_wiki():
         anime_name = data['anime_name'].strip()
         if not anime_name:
             return jsonify({"success": False, "error": "Empty anime name"}), 400
-        
+
         print(f"[MAIN] 🔍 Searching fandom wiki for: {anime_name}")
 
         # Try direct method first - now returns immediately when found
@@ -85,40 +85,40 @@ def search_anime_wiki():
     except Exception as e:
         print(f"[MAIN] 💥 Error: {str(e)}")
         return jsonify({"success": False, "error": str(e)}), 500
-    
+
 
 @app.route('/search-episode-page', methods=['POST'])
 def search_episode_page():
     print("starting episode search")
     try:
         data = request.get_json()
-        
+
         if not data:
             return jsonify({"success": False, "error": "Missing request data"}), 400
-            
+
         subdomain = data.get('subdomain', '').strip()
         episode_title = data.get('episode_title', '').strip()
         episode_number = data.get('episode_number', '').strip()
-        
+
         if not subdomain:
             return jsonify({"success": False, "error": "Missing subdomain"}), 400
-            
+
         if not episode_title and not episode_number:
             return jsonify({"success": False, "error": "Missing both episode_title and episode_number"}), 400
-        
+
         print(f"[EPISODE_SEARCH] 🎯 Searching for episode in {subdomain}.fandom.com")
         print(f"[EPISODE_SEARCH] Episode: {episode_number} - '{episode_title}'")
-        
+
         # Method 1: Try direct URL generation
         print("[EPISODE_SEARCH] 🔧 Trying direct URL generation...")
         possible_urls = generate_episode_urls(subdomain, episode_title, episode_number)
-        
+
         for url in possible_urls:
             print(f"[EPISODE_SEARCH] 🔗 Testing direct URL: {url}")
             if test_episode_url(url, episode_title, episode_number):
                 print(f"[EPISODE_SEARCH] ✅ Found via DIRECT: {url}")
                 return jsonify({
-                    "success": True, 
+                    "success": True,
                     "url": url,
                     "episode_number": episode_number,
                     "episode_title": episode_title,
@@ -129,13 +129,13 @@ def search_episode_page():
         # Method 2: Try Google search for episode
         print("[EPISODE_SEARCH] 🌐 Trying Google search for episode...")
         google_urls = google_episode_search(subdomain, episode_title, episode_number)
-        
+
         for url in google_urls:
             print(f"[EPISODE_SEARCH] 🔗 Testing Google result: {url}")
             if test_episode_url(url, episode_title, episode_number):
                 print(f"[EPISODE_SEARCH] ✅ Found via GOOGLE: {url}")
                 return jsonify({
-                    "success": True, 
+                    "success": True,
                     "url": url,
                     "episode_number": episode_number,
                     "episode_title": episode_title,
@@ -145,23 +145,23 @@ def search_episode_page():
         # Method 3: Try fallback search method (scraping episode lists)
         print("[Episode FALLBACK] 🔍 Trying fallback search method...")
         search_urls = fallback_episode_search(subdomain, episode_title, episode_number)
-        
+
         for url in search_urls:
             print(f"[EPISODE_SEARCH] 🔗 Testing search result: {url}")
             if test_episode_url(url, episode_title, episode_number):
                 print(f"[EPISODE_SEARCH] ✅ Found via FALLBACK: {url}")
                 return jsonify({
-                    "success": True, 
+                    "success": True,
                     "url": url,
                     "episode_number": episode_number,
                     "episode_title": episode_title,
                     "method": "fallback_search"
                 })
-        
+
         # Last resort: Get anime series links from navigation
         print(f"[EPISODE_SEARCH] 🔗 Last resort: Getting anime series links...")
         anime_links = get_anime_series_links(subdomain)
-        
+
         if anime_links:
             print(f"[EPISODE_SEARCH] 📚 Found {len(anime_links)} anime series links as fallback")
             return jsonify({
@@ -171,67 +171,67 @@ def search_episode_page():
                 "anime_series_links": anime_links,
                 "method": "anime_series_fallback"
             }), 404
-        
+
         print(f"[EPISODE_SEARCH] ❌ No working episode page found")
         return jsonify({
-            "success": False, 
+            "success": False,
             "error": "No valid episode page found",
             "tried_direct_urls": possible_urls[:5],
             "tried_google_urls": google_urls[:3],
             "tried_search_urls": search_urls[:3]
         }), 404
-        
+
     except Exception as e:
         print(f"[EPISODE_SEARCH] 💥 Error: {str(e)}")
         return jsonify({"success": False, "error": str(e)}), 500
-    
-    
+
+
 def google_episode_search(subdomain, episode_title, episode_number):
     """Use Google search to find specific episode pages"""
     try:
         # Build multiple search queries to try
         search_queries = []
-        
+
         # Query 1: Site-specific with episode number and title
         if episode_number and episode_title:
             search_queries.append(f'site:{subdomain}.fandom.com "episode {episode_number}" "{episode_title}"')
             search_queries.append(f'site:{subdomain}.fandom.com episode {episode_number} "{episode_title}"')
-        
+
         # Query 2: Just episode title
         if episode_title:
             search_queries.append(f'site:{subdomain}.fandom.com "{episode_title}"')
             search_queries.append(f'site:{subdomain}.fandom.com {episode_title}')
-        
+
         # Query 3: Just episode number
         if episode_number:
             search_queries.append(f'site:{subdomain}.fandom.com "episode {episode_number}"')
-        
+
         found_urls = []
-        
+
         for search_query in search_queries:
             print(f"[GOOGLE_EPISODE] 🔍 Search query: {search_query}")
-            
+
             # Try both Google and DuckDuckGo
             search_engines = [
                 ("Google", f"https://www.google.com/search?q={quote_plus(search_query)}"),
                 ("DuckDuckGo", f"https://duckduckgo.com/html/?q={quote_plus(search_query)}")
             ]
-            
+
             for engine_name, search_url in search_engines:
                 try:
                     headers = {
                         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
                     }
-                    
+
                     response = requests.get(search_url, headers=headers, timeout=10)
                     if response.status_code == 200:
                         soup = BeautifulSoup(response.text, 'html.parser')
-                        
+
                         # Look for search result links
                         for link in soup.find_all('a', href=True):
                             href = link['href']
                             actual_url = None
-                            
+
                             # Handle Google URLs
                             if '/url?q=' in href:
                                 try:
@@ -239,72 +239,72 @@ def google_episode_search(subdomain, episode_title, episode_number):
                                     actual_url = unquote(actual_url)
                                 except:
                                     continue
-                            
-                            # Handle DuckDuckGo URLs  
+
+                            # Handle DuckDuckGo URLs
                             elif href.startswith('http') and f"{subdomain}.fandom.com" in href:
                                 actual_url = href
-                            
+
                             # Handle relative URLs that might be direct fandom links
                             elif '/wiki/' in href and href.startswith('/'):
                                 actual_url = f"https://{subdomain}.fandom.com{href}"
-                            
+
                             if actual_url and f"{subdomain}.fandom.com" in actual_url and "/wiki/" in actual_url:
                                 # Avoid episode lists/guides
                                 if not any(avoid in actual_url.lower() for avoid in ['episode_guide', 'episodes', 'list', 'category']):
                                     if actual_url not in found_urls:
                                         found_urls.append(actual_url)
                                         print(f"[GOOGLE_EPISODE] 🌐 Found via {engine_name}: {actual_url}")
-                                        
+
                                         if len(found_urls) >= 8:  # Limit total results
                                             return found_urls
-                                
+
                                 time.sleep(0.1)  # Small delay between extractions
-                
+
                 except Exception as e:
                     print(f"[GOOGLE_EPISODE] ⚠️ {engine_name} failed: {e}")
                     continue
-                
+
                 time.sleep(0.5)  # Delay between search engines
-            
+
             if found_urls:  # If we found results, don't try more queries
                 break
-            
+
             time.sleep(1)  # Delay between different queries
-        
+
         return found_urls
-    
+
     except Exception as e:
         print(f"[GOOGLE_EPISODE] ❌ Failed: {e}")
-    
+
     return []
 
 
 def fallback_search_methods(anime_name):
     """Alternative search methods when Selenium fails"""
     print(f"[FALLBACK] 🔍 Using alternative search methods for: {anime_name}")
-    
+
     found_urls = []
-    
+
     # Method 1: Try common anime wiki patterns
     common_patterns = [
         anime_name.lower().replace(' ', ''),
         anime_name.lower().replace(' ', '-'),
         ''.join(word for word in anime_name.split() if word.lower() not in ['the', 'a', 'an']).lower(),
     ]
-    
+
     for pattern in common_patterns:
         test_url = f"https://{pattern}.fandom.com"
         if test_url_exists(test_url):
             found_urls.append(test_url)
             print(f"[FALLBACK] ✅ Found via pattern: {test_url}")
-    
+
     # Method 2: Try requests-based search (faster than Selenium)
     try:
         search_urls = requests_based_search(anime_name)
         found_urls.extend(search_urls)
     except Exception as e:
         print(f"[FALLBACK] ⚠️ Requests search failed: {e}")
-    
+
     return found_urls
 
 
@@ -314,15 +314,15 @@ def requests_based_search(anime_name):
         # Use DuckDuckGo as it's more reliable than Google for automated requests
         search_query = f"{anime_name} fandom wiki site:fandom.com"
         search_url = f"https://duckduckgo.com/html/?q={quote_plus(search_query)}"
-        
+
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
         }
-        
+
         response = requests.get(search_url, headers=headers, timeout=10)
         if response.status_code == 200:
             soup = BeautifulSoup(response.text, 'html.parser')
-            
+
             found_urls = []
             # Look for fandom.com links
             for link in soup.find_all('a', href=True):
@@ -335,12 +335,12 @@ def requests_based_search(anime_name):
                         if base_url not in found_urls:
                             found_urls.append(base_url)
                             print(f"[REQUESTS_SEARCH] 🌐 Found: {base_url}")
-            
+
             return found_urls[:5]
-    
+
     except Exception as e:
         print(f"[REQUESTS_SEARCH] ❌ Failed: {e}")
-    
+
     return []
 
 
@@ -348,85 +348,85 @@ def fallback_episode_search(subdomain, episode_title, episode_number):
     """Fallback episode search without Selenium - scrape actual episode pages"""
     search_urls = []
     base_url = f"https://{subdomain}.fandom.com"
-    
+
     try:
         # Try multiple common episode list page patterns
         episode_pages_to_try = [
             f"{base_url}/wiki/Episodes",
-            f"{base_url}/wiki/Episode_Guide", 
+            f"{base_url}/wiki/Episode_Guide",
             f"{base_url}/wiki/List_of_Episodes",
             f"{base_url}/wiki/Episode_List",
             f"{base_url}",  # Main page
         ]
-        
+
         for page_url in episode_pages_to_try:
             try:
                 print(f"[FALLBACK_EPISODE] 📄 Checking: {page_url}")
                 response = requests.get(page_url, headers={
                     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
                 }, timeout=10)
-                
+
                 if response.status_code == 200:
                     soup = BeautifulSoup(response.text, 'html.parser')
-                    
+
                     # Look for episode links more specifically
                     for link in soup.find_all('a', href=True):
                         href = link['href']
                         link_text = link.get_text().strip().lower()
-                        
+
                         # Skip if it's clearly not an episode page
                         if any(skip in href.lower() for skip in ['episode_guide', 'episodes', 'list_of_episodes', 'category', 'template']):
                             continue
-                        
+
                         # Must be a wiki link
                         if '/wiki/' not in href:
                             continue
-                            
+
                         # Build full URL
                         full_url = f"{base_url}{href}" if href.startswith('/') else href
-                        
+
                         # Check if this looks like an episode page
                         is_episode_link = False
-                        
+
                         # Method 1: Check href for episode patterns
                         if any(pattern in href.lower() for pattern in ['episode_', 'ep_', '/ep', 'episode-']):
                             is_episode_link = True
-                        
+
                         # Method 2: Check link text for episode indicators
                         if episode_number:
                             episode_num = str(episode_number).strip()
                             if episode_num in link_text or f"episode {episode_num}" in link_text:
                                 is_episode_link = True
-                        
+
                         # Method 3: Check for episode title match
                         if episode_title:
                             title_lower = episode_title.lower()
                             # Check both exact and partial matches
                             if title_lower in link_text or any(word in link_text for word in title_lower.split() if len(word) > 3):
                                 is_episode_link = True
-                        
+
                         # Method 4: Check for general episode patterns in link text
                         if any(pattern in link_text for pattern in ['episode', 'ep ', 'chapter']):
                             # Make sure it has a number
                             if re.search(r'\d+', link_text):
                                 is_episode_link = True
-                        
+
                         if is_episode_link and full_url not in search_urls:
                             search_urls.append(full_url)
                             print(f"[FALLBACK_EPISODE] 🔗 Found episode link: {full_url} (text: '{link_text[:50]}')")
-                            
+
                             if len(search_urls) >= 15:  # Limit per page
                                 break
-                
+
                 time.sleep(0.5)  # Small delay between pages
-                        
+
             except Exception as e:
                 print(f"[FALLBACK_EPISODE] ⚠️ Error with {page_url}: {e}")
                 continue
-    
+
     except Exception as e:
         print(f"[FALLBACK_EPISODE] ❌ Error: {e}")
-    
+
     # Remove duplicates and limit results
     unique_urls = list(dict.fromkeys(search_urls))
     print(f"[FALLBACK_EPISODE] 📊 Found {len(unique_urls)} potential episode URLs")
@@ -439,22 +439,22 @@ def get_anime_series_links(subdomain):
     try:
         base_url = f"https://{subdomain}.fandom.com"
         print(f"[ANIME_LINKS] 📄 Scraping navigation from: {base_url}")
-        
+
         response = requests.get(base_url, headers={
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
         }, timeout=10)
-        
+
         if response.status_code != 200:
             print(f"[ANIME_LINKS] ❌ Failed to fetch page: {response.status_code}")
             return []
 
         soup = BeautifulSoup(response.text, 'html.parser')
         anime_links = []
-        
+
         # Look for navigation dropdown with anime links
-        # Target the specific structure with nested dropdowns containing "Anime" 
+        # Target the specific structure with nested dropdowns containing "Anime"
         anime_sections = soup.find_all('li', class_='wds-dropdown-level-nested')
-        
+
         for section in anime_sections:
             # Look for the toggle link that contains "Anime"
             toggle_link = section.find('a', class_='wds-dropdown-level-nested__toggle')
@@ -462,20 +462,20 @@ def get_anime_series_links(subdomain):
                 toggle_text = toggle_link.get_text(strip=True).lower()
                 if 'anime' in toggle_text:
                     print(f"[ANIME_LINKS] 🎯 Found anime section: {toggle_text}")
-                    
+
                     # Find the content div with the actual anime series links
                     content_div = section.find('div', class_='wds-dropdown-level-nested__content')
                     if content_div:
                         # Get all links within this section
                         links = content_div.find_all('a', href=True)
-                        
+
                         for link in links:
                             href = link.get('href', '').strip()
                             title = link.find('span')
-                            
+
                             if title and href:
                                 title_text = title.get_text(strip=True)
-                                
+
                                 # Build full URL if it's relative
                                 if href.startswith('/'):
                                     full_url = f"{base_url}{href}"
@@ -483,42 +483,42 @@ def get_anime_series_links(subdomain):
                                     full_url = href
                                 else:
                                     continue
-                                
+
                                 # Skip if it's clearly not an anime series page
                                 if any(skip in href.lower() for skip in ['category:', 'template:', 'help:']):
                                     continue
-                                
+
                                 anime_links.append({
                                     'title': title_text,
                                     'url': full_url
                                 })
-                                
+
                                 print(f"[ANIME_LINKS] 📚 Found: {title_text} -> {full_url}")
-        
+
         # If no specific anime section found, try alternative approaches
         if not anime_links:
             print("[ANIME_LINKS] 🔍 No anime dropdown found, trying alternative methods...")
-            
+
             # Look for any navigation links that might be anime series
             all_nav_links = soup.find_all('a', href=True)
-            
+
             for link in all_nav_links:
                 href = link.get('href', '').strip()
                 text = link.get_text(strip=True)
-                
+
                 # Skip empty or irrelevant links
                 if not text or len(text) < 3:
                     continue
-                
+
                 # Look for patterns that suggest anime series
-                if (('/wiki/' in href and 
+                if (('/wiki/' in href and
                     not any(skip in href.lower() for skip in [
                         'category:', 'template:', 'help:', 'episode_guide', 'episodes', 'list'
                     ]) and
                     any(indicator in text.lower() for indicator in [
                         'anime', 'series', 'season', 'arc'
                     ]))):
-                    
+
                     # Build full URL
                     if href.startswith('/'):
                         full_url = f"{base_url}{href}"
@@ -526,34 +526,34 @@ def get_anime_series_links(subdomain):
                         full_url = href
                     else:
                         continue
-                    
+
                     anime_links.append({
                         'title': text,
                         'url': full_url
                     })
-                    
+
                     print(f"[ANIME_LINKS] 📚 Alternative find: {text} -> {full_url}")
-                    
+
                     # Limit alternative results
                     if len(anime_links) >= 10:
                         break
-        
+
         # Remove duplicates based on URL
         unique_links = []
         seen_urls = set()
-        
+
         for link in anime_links:
             if link['url'] not in seen_urls:
                 seen_urls.add(link['url'])
                 unique_links.append(link)
-        
+
         print(f"[ANIME_LINKS] ✅ Found {len(unique_links)} unique anime series links")
         return unique_links
-        
+
     except Exception as e:
         print(f"[ANIME_LINKS] ❌ Error: {e}")
         return []
-    
+
 def generate_episode_urls(subdomain, episode_title, episode_number):
     base_url = f"https://{subdomain}.fandom.com/wiki/"
     urls = []
@@ -615,18 +615,18 @@ def clean_for_url(text):
     """
     if not text:
         return ""
-    
+
     # Replace spaces with underscores
     cleaned = text.replace(' ', '_')
-    
+
     # Remove or replace problematic characters
     cleaned = re.sub(r'[<>"\[\]{}|\\^]', '', cleaned)
-    
+
     # Handle special characters that are usually URL encoded
     cleaned = cleaned.replace('?', '%3F')
     cleaned = cleaned.replace('#', '%23')
     cleaned = cleaned.replace('&', '%26')
-    
+
     return cleaned
 
 
@@ -638,7 +638,7 @@ def test_episode_url(url, episode_title="", episode_number=""):
         response = requests.get(url, timeout=8, headers={
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
         })
-        
+
         if response.status_code != 200:
             return False
 
@@ -653,14 +653,14 @@ def test_episode_url(url, episode_title="", episode_number=""):
             'episode guide', 'episode list', 'episodes', 'list of episodes',
             'disambiguation', 'search results', 'category:', 'season'
         ]
-        
+
         if any(keyword in title_text or keyword in heading_text for keyword in rejection_keywords):
             print(f"[TEST_URL] ❌ Rejected - appears to be a guide/list page: {url}")
             return False
 
         # Look for episode-specific indicators
         episode_indicators = []
-        
+
         if episode_number:
             num = int(re.search(r'\d+', str(episode_number)).group())
             episode_indicators.extend([
@@ -693,7 +693,7 @@ def test_episode_url(url, episode_title="", episode_number=""):
         if not chapters:
             print(f"[TEST_URL] ❌ No chapter information found in: {url}")
             return False
-        
+
         print(f"[TEST_URL] ✅ Found {len(chapters)} chapters in: {url}")
         return True
 
@@ -710,88 +710,122 @@ def get_episode_content():
         data = request.get_json()
         url = data.get('url')
 
+        if not data:
+            print("[CONTENT] ❌ No JSON data received")
+            return jsonify({"success": False, "error": "No data received"}), 400
+
         if not url or not url.startswith('https://'):
+            print(f"[CONTENT] ❌ Invalid URL: {url}")
             return jsonify({"success": False, "error": "Invalid or missing URL"}), 400
 
         print(f"[CONTENT] 📄 Fetching content from: {url}")
-        response = requests.get(url, timeout=10, headers={
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-        })
 
-        if response.status_code != 200:
-            return jsonify({"success": False, "error": f"Failed with status code {response.status_code}"}), 500
+        # Add retry logic with shorter timeouts
+        max_retries = 2
+        for attempt in range(max_retries):
+            try:
+                response = requests.get(url, timeout=5, headers={
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+                })
+
+                if response.status_code == 200:
+                    break
+                elif attempt == max_retries - 1:
+                    print(f"[CONTENT] ❌ Failed after {max_retries} attempts with status: {response.status_code}")
+                    return jsonify({"success": False, "error": f"Failed with status code {response.status_code}"}), 500
+                else:
+                    print(f"[CONTENT] ⚠️ Attempt {attempt + 1} failed with status {response.status_code}, retrying...")
+                    time.sleep(0.5)
+
+            except requests.exceptions.Timeout:
+                if attempt == max_retries - 1:
+                    print("[CONTENT] ❌ Request timed out after retries")
+                    return jsonify({"success": False, "error": "Request timed out"}), 504
+                else:
+                    print(f"[CONTENT] ⚠️ Timeout on attempt {attempt + 1}, retrying...")
+                    time.sleep(0.5)
+            except requests.exceptions.RequestException as e:
+                print(f"[CONTENT] ❌ Request error: {str(e)}")
+                return jsonify({"success": False, "error": f"Request failed: {str(e)}"}), 500
 
         # Parse and extract relevant content
         soup = BeautifulSoup(response.text, 'html.parser')
-        
+
         # Try to extract chapters or relevant information
         chapters = extract_chapter_info(soup)
-        
+
+        if not chapters:
+            print("[CONTENT] ⚠️ No chapters found on page")
+
+        print(f"[CONTENT] ✅ Successfully extracted {len(chapters)} chapters")
         return jsonify({
-            "success": True, 
+            "success": True,
             "url": url,
-            "chapters": chapters,
-            "html": response.text  # Include full HTML if needed
+            "chapters": chapters
         })
 
     except Exception as e:
-        print(f"[CONTENT] 💥 Error fetching content: {str(e)}")
-        return jsonify({"success": False, "error": str(e)}), 500
+        print(f"[CONTENT] 💥 Unexpected error: {str(e)}")
+        import traceback
+        print(f"[CONTENT] 💥 Traceback: {traceback.format_exc()}")
+        return jsonify({"success": False, "error": f"Internal server error: {str(e)}"}), 500
 
 
 def extract_chapter_info(soup):
-    """
-    Extract chapter information from the episode page using specific div targeting.
-    Works on Fandom-style infoboxes, accounting for chapters or manga references.
-    """
+    try:
+        data_blocks = soup.find_all("div", class_=lambda c: c and "pi-item" in c and "pi-data" in c)
 
-    # Match all blocks that might contain data entries
-    data_blocks = soup.find_all("div", class_=lambda c: c and "pi-item" in c and "pi-data" in c)
+        chapters = []
+        for block in data_blocks:
+            try:
 
-    chapters = []
-    for block in data_blocks:
-        # Get the label (e.g., "Chapter", "Manga Chapter", etc.)
-        label_tag = block.find("h3", class_=lambda c: c and "pi-data-label" in c)
-        value_div = block.find("div", class_=lambda c: c and "pi-data-value" in c)
+                label_tag = block.find("h3", class_=lambda c: c and "pi-data-label" in c)
+                value_div = block.find("div", class_=lambda c: c and "pi-data-value" in c)
 
-        if not label_tag or not value_div:
-            continue  # Skip if key elements are missing
+                if not label_tag or not value_div:
+                    continue
 
-        label_text = label_tag.get_text(strip=True).lower()
-        if "chapter" in label_text or "manga" in label_text:
-            a_tags = value_div.find_all("a")
-            if a_tags:
-                for a in a_tags:
-                    text = a.get_text(strip=True)
-                    numbers = re.findall(r'\d+(?:\.\d+)?[a-zA-Z]?', text)
-                    chapters.extend(numbers or [text])
-            else:
-                # No <a> tags, fallback to raw text
-                text = value_div.get_text(strip=True)
-                numbers = re.findall(r'\d+(?:\.\d+)?[a-zA-Z]?', text)
-                chapters.extend(numbers or [text])
+                label_text = label_tag.get_text(strip=True).lower()
+                if "chapter" in label_text or "manga" in label_text:
+                    a_tags = value_div.find_all("a")
+                    if a_tags:
+                        for a in a_tags:
+                            text = a.get_text(strip=True)
+                            numbers = re.findall(r'\d+(?:\.\d+)?[a-zA-Z]?', text)
+                            chapters.extend(numbers or [text])
+                    else:
+                        text = value_div.get_text(strip=True)
+                        numbers = re.findall(r'\d+(?:\.\d+)?[a-zA-Z]?', text)
+                        chapters.extend(numbers or [text])
+            except Exception as e:
+                print(f"[EXTRACT] ⚠️ Error processing block: {e}")
+                continue
 
-    # Remove duplicates while preserving order
-    chapters = list(dict.fromkeys(chapters))
+        chapters = list(dict.fromkeys(chapters))
 
-    print("Extracted Chapters (or related tags):")
-    print(chapters)
+        # Filter out empty or invalid chapters
+        chapters = [ch for ch in chapters if ch and str(ch).strip()]
 
-    return chapters
+        print(f"[EXTRACT] ✅ Extracted chapters: {chapters}")
+        return chapters
+
+    except Exception as e:
+        print(f"[EXTRACT] ❌ Error in extract_chapter_info: {e}")
+        return []
 
 
 def find_fandom_wiki_direct(anime_name):
     """Try to find anime wiki by constructing likely URLs - returns immediately when valid URL found"""
     print(f"[DIRECT] 🎯 Trying direct URL construction for: {anime_name}")
-    
+
     # Create multiple variations of the anime name
     variations = create_url_variations(anime_name)
-    
+
     for variation in variations:
         # Test the main fandom URL pattern
         test_url = f"https://{variation}.fandom.com"
         print(f"[DIRECT] 🔗 Testing: {test_url}")
-        
+
         if test_url_exists(test_url):
             print(f"[DIRECT] ✅ FOUND: {test_url}")
             # Immediately test validation
@@ -800,7 +834,7 @@ def find_fandom_wiki_direct(anime_name):
                 return test_url  # Return immediately when both exist and validate
             else:
                 print(f"[DIRECT] ❌ Failed validation: {test_url}")
-    
+
     print("[DIRECT] ❌ No valid direct URLs found")
     return None  # Return None if no valid URL found
 
@@ -808,10 +842,10 @@ def find_fandom_wiki_direct(anime_name):
 def create_url_variations(anime_name):
     """Create URL variations with better handling for complex titles"""
     variations = []
-    
+
     # Convert to lowercase and clean
     clean_name = anime_name.lower().strip()
-    
+
     # Special handling for known anime patterns
     special_cases = {
         'kaguya': ['kaguyasama-wa-kokurasetai', 'kaguya-sama-wa-kokurasetai', 'kaguyasama'],
@@ -825,23 +859,23 @@ def create_url_variations(anime_name):
         'one piece': ['onepiece'],
         'dragon ball': ['dragonball'],
     }
-    
+
     # Check for special cases first
     for key, values in special_cases.items():
         if key in clean_name:
             variations.extend(values)
-    
+
     # Standard variations
     clean_for_url = re.sub(r'[!@#$%^&*()+=\[\]{}|\\:";\'<>?,./]', '', clean_name)
     clean_for_url = re.sub(r'\s+', ' ', clean_for_url).strip()
-    
+
     # Create variations
     variations.extend([
         clean_for_url.replace(' ', ''),
         clean_for_url.replace(' ', '-'),
         clean_for_url.split()[0] if ' ' in clean_for_url else clean_for_url,
     ])
-    
+
     # Remove duplicates
     unique_variations = []
     seen = set()
@@ -849,7 +883,7 @@ def create_url_variations(anime_name):
         if var and var not in seen and len(var) > 1:
             seen.add(var)
             unique_variations.append(var)
-    
+
     return unique_variations
 
 
@@ -859,11 +893,11 @@ def test_url_exists(url):
         response = requests.get(url, timeout=8, headers={
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
         }, allow_redirects=True)
-        
+
         if response.status_code == 200 and 'fandom.com' in response.url:
             return True
         return False
-        
+
     except Exception:
         return False
 
@@ -878,7 +912,7 @@ def validate_anime_wiki(url, anime_title):
             return False
 
         soup = BeautifulSoup(response.text, 'html.parser')
-        
+
         # Check for the specific Fandom wiki page header structure
         page_header = soup.find('div', class_='page-header__title-wrapper')
         if page_header:
@@ -886,19 +920,19 @@ def validate_anime_wiki(url, anime_title):
             if title_element:
                 print(f"[VALIDATE] ✅ Found valid Fandom wiki structure for: {url}")
                 return True
-        
+
         print(f"[VALIDATE] ❌ No valid Fandom wiki structure found for: {url}")
         return False
 
     except Exception as e:
         print(f"[VALIDATE] ❌ Error validating {url}: {e}")
         return False
-    
+
 
 @app.route('/health', methods=['GET'])
 def health_check():
     return jsonify({
-        'status': 'healthy', 
+        'status': 'healthy',
         'message': 'Anime Wiki Finder API is running',
         'endpoints': {
             '/search-anime-wiki': 'Find anime fandom wiki',
