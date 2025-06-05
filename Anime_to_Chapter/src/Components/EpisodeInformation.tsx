@@ -284,7 +284,7 @@ const EpisodesInformation = ({ searchQuery, setSearchQuery, setSearchResults, se
 
         const searchWikiWithTitle = async (animeName: string): Promise<WikiSearchResponse> => {
             try {
-                // const response = await fetch('http://localhost:5000/search-anime-wiki', {
+                // const response = await fetch('https://localhost:5000/search-anime-wiki', {
                 const response = await fetch('https://blankcode.pythonanywhere.com/search-anime-wiki', {
                     method: 'POST',
                     headers: {
@@ -384,8 +384,8 @@ const EpisodesInformation = ({ searchQuery, setSearchQuery, setSearchResults, se
         try {
             console.log(`Searching for episode page: ${episodeNumber} - "${episodeTitle}" in ${subdomain}.fandom.com`);
 
-            // const response = await fetch('http://localhost:5000/search-episode-page', {
-            const response = await fetch('http://blankcode.pythonanywhere.com/search-episode-page', {
+            // const response = await fetch('https://localhost:5000/search-episode-page', {
+            const response = await fetch('https://blankcode.pythonanywhere.com/search-episode-page', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -430,8 +430,8 @@ const EpisodesInformation = ({ searchQuery, setSearchQuery, setSearchResults, se
         try {
             console.log(`Fetching episode content from: ${url}`);
 
-            // const response = await fetch('http://localhost:5000/get-episode-content', {
-            const response = await fetch('http://blankcode.pythonanywhere.com/get-episode-content', {
+            // const response = await fetch('https://localhost:5000/get-episode-content', {
+            const response = await fetch('https://blankcode.pythonanywhere.com/get-episode-content', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
