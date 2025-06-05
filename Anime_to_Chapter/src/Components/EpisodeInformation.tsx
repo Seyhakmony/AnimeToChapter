@@ -142,6 +142,9 @@ const EpisodesInformation = ({ searchQuery, setSearchQuery, setSearchResults, se
     const [wikiSubdomain, setWikiSubdomain] = useState<string>("");
     const [fallbackData, setFallbackData] = useState<{ [episodeId: number]: { message: string, links: Array<{ title: string, url: string }> } }>({});
 
+
+    const [localSearchQuery, setlocalSearchQuery] = useState('');
+
     useEffect(() => {
         const fetchData = async () => {
             setIsLoading(true);
@@ -157,12 +160,29 @@ const EpisodesInformation = ({ searchQuery, setSearchQuery, setSearchResults, se
 
                 await new Promise(resolve => setTimeout(resolve, 1000));
 
-                const episodesResponse = await fetch(`https://api.jikan.moe/v4/anime/${id}/episodes`);
-                if (!episodesResponse.ok) {
-                    throw new Error('Failed to fetch episodes');
+                // Fetch all episodes from all pages
+                let allEpisodes: Episode[] = [];
+                let currentPage = 1;
+                let hasNextPage = true;
+
+                while (hasNextPage) {
+                    const episodesResponse = await fetch(`https://api.jikan.moe/v4/anime/${id}/episodes?page=${currentPage}`);
+                    if (!episodesResponse.ok) {
+                        throw new Error('Failed to fetch episodes');
+                    }
+                    const episodesData: JikanEpisodesResponse = await episodesResponse.json();
+
+                    allEpisodes = [...allEpisodes, ...episodesData.data];
+                    hasNextPage = episodesData.pagination.has_next_page;
+                    currentPage++;
+
+                    // Add delay between requests to respect rate limits
+                    if (hasNextPage) {
+                        await new Promise(resolve => setTimeout(resolve, 1000));
+                    }
                 }
-                const episodesData: JikanEpisodesResponse = await episodesResponse.json();
-                setEpisodes(episodesData.data);
+
+                setEpisodes(allEpisodes);
             } catch (err) {
                 setError(err instanceof Error ? err.message : 'An unknown error occurred');
             } finally {
@@ -190,10 +210,12 @@ const EpisodesInformation = ({ searchQuery, setSearchQuery, setSearchResults, se
 
         setGlobalIsLoading(true);
         setGlobalError(null);
+        setSearchQuery(localSearchQuery);
 
         try {
             const response = await fetch(
-                `https://api.jikan.moe/v4/anime?q=${encodeURIComponent(searchQuery)}&limit=20&order_by=popularity&sort=asc`
+                // `https://api.jikan.moe/v4/anime?q=${encodeURIComponent(searchQuery)}&limit=20&order_by=popularity&sort=asc`
+                `https://api.jikan.moe/v4/anime?q=${encodeURIComponent(searchQuery)}&limit=20&order_by=popularity&sort=asc&type=tv`
             );
 
             if (!response.ok) {
@@ -254,7 +276,8 @@ const EpisodesInformation = ({ searchQuery, setSearchQuery, setSearchResults, se
 
         const searchWikiWithTitle = async (animeName: string): Promise<WikiSearchResponse> => {
             try {
-                const response = await fetch('http://localhost:5000/search-anime-wiki', {
+                // const response = await fetch('http://localhost:5000/search-anime-wiki', {
+                const response = await fetch('https://blankcode.pythonanywhere.com/search-anime-wiki', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -353,7 +376,8 @@ const EpisodesInformation = ({ searchQuery, setSearchQuery, setSearchResults, se
         try {
             console.log(`Searching for episode page: ${episodeNumber} - "${episodeTitle}" in ${subdomain}.fandom.com`);
 
-            const response = await fetch('http://localhost:5000/search-episode-page', {
+            // const response = await fetch('http://localhost:5000/search-episode-page', {
+            const response = await fetch('http://blankcode.pythonanywhere.com/search-episode-page', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -398,7 +422,8 @@ const EpisodesInformation = ({ searchQuery, setSearchQuery, setSearchResults, se
         try {
             console.log(`Fetching episode content from: ${url}`);
 
-            const response = await fetch('http://localhost:5000/get-episode-content', {
+            // const response = await fetch('http://localhost:5000/get-episode-content', {
+            const response = await fetch('http://blankcode.pythonanywhere.com/get-episode-content', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -483,8 +508,8 @@ const EpisodesInformation = ({ searchQuery, setSearchQuery, setSearchResults, se
                 <form onSubmit={handleSubmit} className="episode-search-form">
                     <input
                         type="text"
-                        value=""
-                        onChange={(e) => setSearchQuery(e.target.value)}
+                        value={localSearchQuery}
+                        onChange={(e) => setlocalSearchQuery(e.target.value)}
                         placeholder="Search for another anime..."
                         className="episode-search-input"
                     />
@@ -509,8 +534,8 @@ const EpisodesInformation = ({ searchQuery, setSearchQuery, setSearchResults, se
                 <form onSubmit={handleSubmit} className="episode-search-form">
                     <input
                         type="text"
-                        value=""
-                        onChange={(e) => setSearchQuery(e.target.value)}
+                        value={localSearchQuery}
+                        onChange={(e) => setlocalSearchQuery(e.target.value)}
                         placeholder="Search for another anime..."
                         className="episode-search-input"
                     />
@@ -533,8 +558,8 @@ const EpisodesInformation = ({ searchQuery, setSearchQuery, setSearchResults, se
                     <form onSubmit={handleSubmit} className="episode-search-form">
                         <input
                             type="text"
-                            value=""
-                            onChange={(e) => setSearchQuery(e.target.value)}
+                            value={localSearchQuery}
+                            onChange={(e) => setlocalSearchQuery(e.target.value)}
                             placeholder="Search for another anime..."
                             className="episode-search-input"
                         />
@@ -694,7 +719,22 @@ const EpisodesInformation = ({ searchQuery, setSearchQuery, setSearchResults, se
                                                                     </a>
                                                                 </div>
                                                             )}
-
+                                                        </div>
+                                                    ) : successfulUrls[episode.mal_id] && successfulUrls[episode.mal_id] !== '' ? (
+                                                        <div>
+                                                            <p className="episode-fallback-message">
+                                                                No Chapter's Found
+                                                            </p>
+                                                            <div style={{ marginBottom: '15px' }}>
+                                                                <a
+                                                                    href={successfulUrls[episode.mal_id]}
+                                                                    target="_blank"
+                                                                    rel="noopener noreferrer"
+                                                                    className="episode-episode-link"
+                                                                >
+                                                                    📖 View Full Episode Page
+                                                                </a>
+                                                            </div>
                                                         </div>
                                                     ) : fallbackData[episode.mal_id] ? (
                                                         <div>

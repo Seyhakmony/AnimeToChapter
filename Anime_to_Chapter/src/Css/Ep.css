@@ -161,6 +161,7 @@
 /* Episode Wiki Status */
 .episode-wiki-found {
   margin-bottom: 20px;
+  text-align: center;
 }
 
 .episode-wiki-found a {
@@ -172,6 +173,7 @@
 
 .episode-wiki-searching {
   margin-bottom: 20px;
+  text-align: center;
 }
 
 .episode-wiki-searching span {

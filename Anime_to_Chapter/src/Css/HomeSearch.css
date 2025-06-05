@@ -41,15 +41,26 @@ html, body {
   text-align: left;
 }
 
+
 .home-container {
-  min-height: 100vh;
-  background: transparent;
+  min-height: 80vh;
+  background: rgba(36, 36, 62, 0.85);
+  backdrop-filter: blur(20px);
   color: #ffffff;
-  padding: 20px;
+  padding: 40px 60px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  margin: 20px;
+  border-radius: 20px;
+  border: 2px solid rgba(72, 61, 139, 0.6);
+  box-shadow: 
+    0 8px 32px rgba(15, 12, 41, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    0 0 30px rgba(72, 61, 139, 0.3);
+  backdrop-filter: blur(20px);
+
 }
 
 .home-content-wrapper {
@@ -83,7 +94,7 @@ html, body {
   background: linear-gradient(45deg, rgba(255, 0, 128, 0.1), rgba(0, 255, 255, 0.1));
   border-radius: 20px;
   z-index: -1;
-  animation: float 4s ease-in-out infinite;
+  /* animation: float 4s ease-in-out infinite; */
 }
 
 .home-subtitle {
@@ -381,14 +392,60 @@ html, body {
   border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-/* Responsive Design */
+/* Mobile Responsive Fixes */
 @media (max-width: 768px) {
+  p-4 {
+    padding: 0 !important;
+  }
+  
+  .mx-auto {
+    margin-right: 0 !important;
+    margin-left: 0 !important;
+  }
+  
+  .container, 
+  .container-fluid, 
+  .container-xxl, 
+  .container-xl, 
+  .container-lg, 
+  .container-md, 
+  .container-sm {
+    padding-right: 0 !important;
+    padding-left: 0 !important;
+  }
+  
+  #root {
+    padding: 0 !important;
+    padding-top: 5vh !important;;
+  }
+  
+  .home-container {
+    min-height: 70vh;
+    margin: 10px;
+    padding: 20px 30px;
+  }
+  
   .home-title {
     font-size: 2.5rem;
   }
   
+  .home-search-form {
+    padding: 20px;
+  }
+  
   .home-search-container {
     flex-direction: column;
+    gap: 12px;
+  }
+  
+  .home-search-input {
+    font-size: 16px;
+    padding: 15px 20px;
+  }
+  
+  .home-search-button {
+    padding: 15px 25px;
+    font-size: 16px;
   }
   
   .search-header {
@@ -414,6 +471,7 @@ html, body {
   .search-result-item {
     flex-direction: column;
     text-align: center;
+    padding: 15px;
   }
   
   .search-result-image {
@@ -437,16 +495,41 @@ html, body {
 }
 
 @media (max-width: 480px) {
+  .home-container {
+    margin: 5px;
+    padding: 15px 20px;
+  }
+  
   .home-title {
     font-size: 2rem;
+    margin-bottom: 30px;
+  }
+  
+  .home-subtitle {
+    font-size: 1rem;
+    margin-bottom: 30px;
   }
   
   .home-search-form {
-    padding: 20px;
+    padding: 15px;
+  }
+  
+  .home-search-input {
+    font-size: 14px;
+    padding: 12px 15px;
+  }
+  
+  .home-search-button {
+    padding: 12px 20px;
+    font-size: 14px;
   }
   
   .search-result-image {
     width: 60px;
     height: 90px;
+  }
+  
+  .search-result-item {
+    padding: 12px;
   }
 }

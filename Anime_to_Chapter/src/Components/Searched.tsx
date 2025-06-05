@@ -41,7 +41,7 @@ const Searched = ({
   const state = location.state as { searchQuery?: string; preserveResults?: boolean } | null;
 
   
-  const [localSearchQuery, setLocalSearchQuery] = useState(searchQuery);
+  const [localSearchQuery, setLocalSearchQuery] = useState('');
 
   useEffect(() => {
     // If we have state from navigation (back button), restore the search
@@ -73,7 +73,7 @@ useEffect(() => {
 
     try {
       const response = await fetch(
-        `https://api.jikan.moe/v4/anime?q=${encodeURIComponent(query)}&limit=20&order_by=popularity&sort=asc`
+        `https://api.jikan.moe/v4/anime?q=${encodeURIComponent(query)}&limit=20&order_by=popularity&sort=asc&type=tv`
       );
 
       if (!response.ok) {
@@ -112,7 +112,7 @@ useEffect(() => {
           <form onSubmit={handleSubmit} className="search-form-container">
             <input
               type="text"
-              value=""
+              value={localSearchQuery}
               onChange={(e) => setLocalSearchQuery(e.target.value)}
               placeholder="Search for another anime..."
               className="search-input"
