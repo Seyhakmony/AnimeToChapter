@@ -129,7 +129,7 @@ interface EpisodeContentResponse {
     error?: string;
 }
 
-const EpisodesInformation = ({ searchQuery, setSearchQuery, setSearchResults, setIsLoading: setGlobalIsLoading, setError: setGlobalError }: EpisodesInformationProps) => {
+const EpisodesInformation = ({setSearchQuery, setSearchResults, setIsLoading: setGlobalIsLoading, setError: setGlobalError }: EpisodesInformationProps) => {
     const { id } = useParams<{ id: string }>();
     const [anime, setAnime] = useState<AnimeDetail | null>(null);
     const [episodes, setEpisodes] = useState<Episode[]>([]);
