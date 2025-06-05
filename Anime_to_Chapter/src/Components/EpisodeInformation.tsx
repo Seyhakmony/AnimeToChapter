@@ -222,7 +222,7 @@ const EpisodesInformation = ({ searchQuery, setSearchQuery, setSearchResults, se
         try {
             const response = await fetch(
                 // `https://api.jikan.moe/v4/anime?q=${encodeURIComponent(searchQuery)}&limit=20&order_by=popularity&sort=asc`
-                `https://api.jikan.moe/v4/anime?q=${encodeURIComponent(searchQuery)}&limit=20&order_by=popularity&sort=asc&type=tv`
+                `https://api.jikan.moe/v4/anime?q=${encodeURIComponent(localSearchQuery)}&limit=20&order_by=popularity&sort=asc&type=tv`
             );
 
             if (!response.ok) {
